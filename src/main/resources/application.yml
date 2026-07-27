@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: ink-ms-users
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/user_ms?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: 
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format-sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+server:
+  port: 3002
+
+jwt:
+  secret: inklusport2024superSecretKeyForJWTtokenGenerationWith512bitsAlgorithmHS512
+  expiration: 86400000
+
+logging:
+  level:
+    com.inklusport.users: DEBUG
+
+auth:
+  service:
+    url: http://localhost:3001

@@ -1,0 +1,5 @@
+USE user_ms;
+
+ALTER TABLE user_profile
+    ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN phone_verified BOOLEAN NOT NULL DEFAULT FALSE;

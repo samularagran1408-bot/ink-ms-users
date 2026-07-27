@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: ink-ms-users
+  
+  datasource:
+    url: jdbc:mysql://mysql:3306/user_ms?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: 
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format-sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+server:
+  port: 3002
+
+auth:
+  service:
+    url: http://auth-service:3001
+
+security:
+  basic:
+    enabled: false
+
+logging:
+  level:
+    com.inklusport.users: DEBUG
