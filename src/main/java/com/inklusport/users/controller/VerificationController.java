@@ -1,7 +1,7 @@
 package com.inklusport.users.controller;
 
 import com.inklusport.users.dto.UserProfileResponse;
-import com.inklusport.common.dto.response.ErrorResponse;
+import com.inklusport.users.dto.ErrorResponse;
 import com.inklusport.users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -45,6 +45,30 @@ public class User {
     private String disability;
 
     /**
+     * Acompañante de apoyo (obligatorio en registro si disability = MOTRIZ).
+     */
+    @Column(name = "companion_full_name", length = 150)
+    private String companionFullName;
+
+    @Column(name = "companion_phone", length = 20)
+    private String companionPhone;
+
+    @Column(name = "companion_relationship", length = 80)
+    private String companionRelationship;
+
+    @Column(name = "companion_email", length = 100)
+    private String companionEmail;
+
+    /**
+     * Preferencia de apoyo comunicativo (obligatoria en registro si disability = AUDITIVA).
+     */
+    @Column(name = "support_preference", length = 50)
+    private String supportPreference;
+
+    @Column(name = "support_preference_notes", length = 255)
+    private String supportPreferenceNotes;
+
+    /**
      * CAMPOS DE VERIFICACIÓN
      */
 

@@ -4,7 +4,7 @@ import com.inklusport.users.dto.AssignRoleRequest;
 import com.inklusport.users.dto.AssignRoleResponse;
 import com.inklusport.users.dto.RoleResponse;
 import com.inklusport.users.dto.UserProfileResponse;
-import com.inklusport.common.dto.response.ErrorResponse;
+import com.inklusport.users.dto.ErrorResponse;
 import com.inklusport.users.service.RoleService;
 import com.inklusport.users.service.UserService;
 import com.inklusport.users.repository.UserRepository;

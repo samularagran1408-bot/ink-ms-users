@@ -3,7 +3,7 @@ package com.inklusport.users.controller;
 import com.inklusport.users.dto.UpdateProfileRequest;
 import com.inklusport.users.dto.UserActivityResponse;
 import com.inklusport.users.dto.UserProfileResponse;
-import com.inklusport.common.dto.response.ErrorResponse;
+import com.inklusport.users.dto.ErrorResponse;
 import com.inklusport.users.service.UserService;
 import com.inklusport.users.service.UserActivityService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,8 +45,14 @@ public class UserController {
             UserProfileResponse response = userService.createUserProfile(email, request.getFullName());
             
             // Actualiza campos opcionales si fueron enviados en el request.
-            if (request.getPhone() != null || 
-                request.getProfilePicture() != null || request.getBio() != null || request.getDisability() != null) {
+            if (request.getPhone() != null
+                    || request.getProfilePicture() != null
+                    || request.getBio() != null
+                    || request.getDisability() != null
+                    || request.getCompanionFullName() != null
+                    || request.getCompanionPhone() != null
+                    || request.getCompanionRelationship() != null
+                    || request.getCompanionEmail() != null) {
                 response = userService.updateUserProfile(email, request);
             }
             

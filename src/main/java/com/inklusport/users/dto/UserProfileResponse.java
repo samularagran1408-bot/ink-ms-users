@@ -20,6 +20,12 @@ public class UserProfileResponse {
     private String profilePicture;
     private String bio;
     private String disability;
+    private String companionFullName;
+    private String companionPhone;
+    private String companionRelationship;
+    private String companionEmail;
+    private String supportPreference;
+    private String supportPreferenceNotes;
     private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

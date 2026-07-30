@@ -1,6 +1,6 @@
 package com.inklusport.users.exception;
 
-import com.inklusport.common.dto.response.ErrorResponse;
+import com.inklusport.users.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

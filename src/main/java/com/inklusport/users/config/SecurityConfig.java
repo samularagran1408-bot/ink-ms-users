@@ -1,7 +1,7 @@
 package com.inklusport.users.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.inklusport.common.dto.response.ErrorResponse;
+import com.inklusport.users.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
