@@ -4,8 +4,11 @@ import com.inklusport.users.config.JwtAuthenticationFilter;
 import com.inklusport.users.config.SecurityConfig;
 import com.inklusport.users.dto.UserProfileResponse;
 import com.inklusport.users.exception.GlobalExceptionHandler;
+import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.security.JwtTokenProvider;
+import com.inklusport.users.service.AdminAuditService;
 import com.inklusport.users.service.RoleService;
+import com.inklusport.users.service.SystemConfigService;
 import com.inklusport.users.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -46,6 +49,15 @@ class AdminUserControllerSecurityTest {
 
     @MockBean
     private RoleService roleService;
+
+    @MockBean
+    private AdminAuditService adminAuditService;
+
+    @MockBean
+    private SystemConfigService systemConfigService;
+
+    @MockBean
+    private UserRepository userRepository;
 
     @Test
     void getAllUsers_conTokenAdmin_devuelve200() throws Exception {

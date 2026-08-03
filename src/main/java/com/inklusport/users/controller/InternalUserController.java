@@ -1,6 +1,7 @@
 package com.inklusport.users.controller;
 
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
+import com.inklusport.users.dto.UserAccessStatusResponse;
 import com.inklusport.users.dto.UserProfileResponse;
 import com.inklusport.users.service.RoleService;
 import com.inklusport.users.service.UserService;
@@ -20,10 +21,6 @@ import java.util.List;
 
 /**
  * Endpoints internos para consumo entre microservicios.
- * Flujo:
- * 1) Resolucion de roles por email para autorizacion interna
- * 2) Alta de perfil desde registro (auth → users)
- * 3) Consulta de perfil por ID (AI assistant y otros MS)
  */
 @RestController
 @RequestMapping("/api/internal/users")
@@ -33,20 +30,19 @@ public class InternalUserController {
     private final RoleService roleService;
     private final UserService userService;
 
-    // ===== Bloque 1: Resolucion de roles =====
-    /**
-     * Retorna los roles de un usuario por correo para validaciones internas.
-     */
     @GetMapping("/roles-by-email")
     public List<String> getUserRoles(@RequestParam String email) {
         return roleService.getUserRoles(email);
     }
 
-    // ===== Bloque 2: Perfil desde registro =====
     /**
-     * Crea el perfil con discapacidad / acompañante / preferencia de apoyo
-     * tras un POST /api/auth/register exitoso.
+     * RF28: estado de acceso efectivo (bloqueos temporales/permanentes).
      */
+    @GetMapping("/access-status")
+    public UserAccessStatusResponse getAccessStatus(@RequestParam String email) {
+        return userService.getAccessStatus(email);
+    }
+
     @PostMapping("/profile-from-register")
     @ResponseStatus(HttpStatus.CREATED)
     public UserProfileResponse createProfileFromRegister(
@@ -54,10 +50,6 @@ public class InternalUserController {
         return userService.createProfileFromRegister(request);
     }
 
-    // ===== Bloque 3: Perfil por ID =====
-    /**
-     * Perfil de usuario por ID para microservicios (p. ej. ink-ms-ai-assistant).
-     */
     @GetMapping("/{id}")
     public UserProfileResponse getUserById(@PathVariable String id) {
         return userService.getUserProfileById(id);

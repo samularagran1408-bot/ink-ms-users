@@ -1,13 +1,12 @@
 package com.inklusport.users.controller;
 
-import com.inklusport.users.dto.AssignRoleRequest;
-import com.inklusport.users.dto.AssignRoleResponse;
-import com.inklusport.users.dto.RoleResponse;
-import com.inklusport.users.dto.UserProfileResponse;
-import com.inklusport.users.dto.ErrorResponse;
-import com.inklusport.users.service.RoleService;
-import com.inklusport.users.service.UserService;
+import com.inklusport.users.dto.*;
 import com.inklusport.users.repository.UserRepository;
+import com.inklusport.users.service.AdminAuditService;
+import com.inklusport.users.service.RoleService;
+import com.inklusport.users.service.SystemConfigService;
+import com.inklusport.users.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,11 +21,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Endpoints administrativos para gestión de usuarios y roles.
- * Requiere rol ADMIN en toda la clase.
- * Flujo:
- * 1. Consulta y estado de usuarios
- * 2. Gestión de roles
+ * Panel administrativo (RF26–RF30): usuarios, roles, bloqueos, auditoría y configuración.
+ * Requiere rol ADMIN.
  */
 @RestController
 @RequestMapping("/api/admin/users")
@@ -37,154 +33,213 @@ public class AdminUserController {
     private final UserService userService;
     private final RoleService roleService;
     private final UserRepository userRepository;
+    private final AdminAuditService adminAuditService;
+    private final SystemConfigService systemConfigService;
 
-    /**
-     * Bloque 1: Consulta y estado de usuarios
-     * @return
-     */
+    // ========== RF26: Consulta y edición de usuarios ==========
 
-    /**
-     * Lista todos los usuarios registrados.
-     * GET /api/admin/users
-     */
     @GetMapping
     public ResponseEntity<List<UserProfileResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
-    /**
-     * Lista solo usuarios activos.
-     * GET /api/admin/users/active
-     */
     @GetMapping("/active")
     public ResponseEntity<List<UserProfileResponse>> getActiveUsers() {
         return ResponseEntity.ok(userService.getActiveUsers());
     }
 
-    /**
-     * Desactiva un usuario por email.
-     * POST /api/admin/users/{email}/deactivate
-     */
+    @GetMapping("/inactive")
+    public ResponseEntity<List<UserProfileResponse>> getInactiveUsers() {
+        return ResponseEntity.ok(userService.getInactiveUsers());
+    }
+
+    @GetMapping("/count")
+    public ResponseEntity<Long> countUsers() {
+        return ResponseEntity.ok(userRepository.count());
+    }
+
+    @GetMapping("/active/count")
+    public ResponseEntity<Long> countActiveUsers() {
+        return ResponseEntity.ok(userRepository.countByIsActiveTrue());
+    }
+
+    @GetMapping("/by-email")
+    public ResponseEntity<UserProfileResponse> getUserByEmail(@RequestParam String email) {
+        return ResponseEntity.ok(userService.getUserProfileByEmail(email));
+    }
+
+    @PutMapping("/{email}")
+    public ResponseEntity<?> updateUser(
+            @PathVariable String email,
+            @Valid @RequestBody UpdateProfileRequest request,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
+        try {
+            return ResponseEntity.ok(userService.adminUpdateUser(
+                    targetEmail, request, adminEmail, clientIp(httpRequest)));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail);
+        }
+    }
+
+    @GetMapping("/{email}/exists")
+    public ResponseEntity<Boolean> userExists(@PathVariable String email) {
+        return ResponseEntity.ok(userService.userExists(decodeEmail(email)));
+    }
+
+    // ========== RF28: Bloqueo / activación ==========
+
     @PostMapping("/{email}/deactivate")
-    public ResponseEntity<?> deactivateUser(@PathVariable String email) {
+    public ResponseEntity<?> deactivateUser(
+            @PathVariable String email,
+            @RequestBody(required = false) BlockUserRequest request,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
         try {
-            userService.deactivateUser(email);
-            return ResponseEntity.ok().build();
+            BlockUserRequest body = request != null ? request : new BlockUserRequest();
+            return ResponseEntity.ok(userService.deactivateUser(
+                    targetEmail, body, adminEmail, clientIp(httpRequest)));
         } catch (Exception e) {
-            return buildErrorResponse(e, "/api/admin/users/" + email + "/deactivate");
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/deactivate");
         }
     }
 
-    /**
-     * Activa un usuario por email.
-     * POST /api/admin/users/{email}/activate
-     */
+    @PostMapping("/{email}/block")
+    public ResponseEntity<?> blockUser(
+            @PathVariable String email,
+            @Valid @RequestBody BlockUserRequest request,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
+        try {
+            return ResponseEntity.ok(userService.deactivateUser(
+                    targetEmail, request, adminEmail, clientIp(httpRequest)));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/block");
+        }
+    }
+
     @PostMapping("/{email}/activate")
-    public ResponseEntity<?> activateUser(@PathVariable String email) {
+    public ResponseEntity<?> activateUser(
+            @PathVariable String email,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
         try {
-            userService.activateUser(email);
-            return ResponseEntity.ok().build();
+            return ResponseEntity.ok(userService.activateUser(
+                    targetEmail, adminEmail, clientIp(httpRequest)));
         } catch (Exception e) {
-            return buildErrorResponse(e, "/api/admin/users/" + email + "/activate");
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/activate");
         }
     }
 
-    /**
-     * Bloque 2: Gestión de roles
-     */
+    // ========== RF27: Roles ==========
 
-    /**
-     * Lista los roles disponibles en el sistema.
-     * GET /api/admin/users/roles
-     */
     @GetMapping("/roles")
     public ResponseEntity<List<RoleResponse>> getAllRoles() {
         return ResponseEntity.ok(roleService.getAllRoles());
     }
 
-    /**
-     * Cuenta total de usuarios.
-     * GET /api/admin/users/count
-     */
-    @GetMapping("/count")
-    public ResponseEntity<Long> countUsers() {
-        long count = userRepository.count();
-        return ResponseEntity.ok(count);
+    @GetMapping("/roles-by-email")
+    public ResponseEntity<List<String>> getUserRoles(@RequestParam String email) {
+        return ResponseEntity.ok(roleService.getUserRoles(email));
     }
 
-    /**
-     * Cuenta usuarios activos.
-     * GET /api/admin/users/active/count
-     */
-    @GetMapping("/active/count")
-    public ResponseEntity<Long> countActiveUsers() {
-        long count = userRepository.countByIsActiveTrue();
-        return ResponseEntity.ok(count);
-    }
-
-    /**
-     * Asigna un rol a un usuario.
-     * POST /api/admin/users/{email}/roles
-     */
     @PostMapping("/{email}/roles")
     public ResponseEntity<?> assignRole(
             @PathVariable String email,
             @Valid @RequestBody AssignRoleRequest request,
-            @AuthenticationPrincipal String adminEmail) {
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
         String targetEmail = decodeEmail(email);
         try {
-            AssignRoleResponse response = roleService.assignRoleToUser(targetEmail, request, adminEmail);
+            AssignRoleResponse response = roleService.assignRoleToUser(
+                    targetEmail, request, adminEmail, clientIp(httpRequest));
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/roles");
         }
     }
 
-    /**
-     * Consulta los roles de un usuario por email.
-     * GET /api/admin/users/roles-by-email?email=user@example.com
-     */
-    @GetMapping("/roles-by-email")
-    public ResponseEntity<List<String>> getUserRoles(@RequestParam String email) {
-        List<String> roles = roleService.getUserRoles(email);
-        return ResponseEntity.ok(roles);
-    }
-
-    /**
-     * Remueve un rol específico de un usuario.
-     * DELETE /api/admin/users/{email}/roles/{roleId}
-     */
-    @DeleteMapping("/{email}/roles/{roleId}")
-    public ResponseEntity<?> removeRole(
+    @PutMapping("/{email}/roles")
+    public ResponseEntity<?> replaceRoles(
             @PathVariable String email,
-            @PathVariable Long roleId) {
+            @Valid @RequestBody ReplaceRolesRequest request,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
         try {
-            roleService.removeRoleFromUser(email, roleId);
-            return ResponseEntity.ok().build();
+            return ResponseEntity.ok(roleService.replaceUserRoles(
+                    targetEmail, request, adminEmail, clientIp(httpRequest)));
         } catch (Exception e) {
-            return buildErrorResponse(e, "/api/admin/users/" + email + "/roles/" + roleId);
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/roles");
         }
     }
 
-    /**
-     * Verifica si un usuario existe por email.
-     * GET /api/admin/users/{email}/exists
-     */
-    @GetMapping("/{email}/exists")
-    public ResponseEntity<Boolean> userExists(@PathVariable String email) {
-        return ResponseEntity.ok(userService.userExists(email));
+    @DeleteMapping("/{email}/roles/{roleId}")
+    public ResponseEntity<?> removeRole(
+            @PathVariable String email,
+            @PathVariable Long roleId,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
+        try {
+            roleService.removeRoleFromUser(targetEmail, roleId, adminEmail, clientIp(httpRequest));
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/roles/" + roleId);
+        }
     }
 
-    /**
-     * Métodos auxiliares
-     * @param e
-     * @param path
-     * @return
-     */
+    // ========== RF29: Historial de acciones administrativas ==========
 
-    /**
-     * Construye una respuesta de error en formato JSON estandarizado.
-     */
+    @GetMapping("/audit")
+    public ResponseEntity<List<AdminAuditLogResponse>> getAuditLog(
+            @RequestParam(required = false) String targetEmail,
+            @RequestParam(required = false) String adminEmail) {
+        if (targetEmail != null && !targetEmail.isBlank()) {
+            return ResponseEntity.ok(adminAuditService.getByTargetEmail(targetEmail));
+        }
+        if (adminEmail != null && !adminEmail.isBlank()) {
+            return ResponseEntity.ok(adminAuditService.getByAdminEmail(adminEmail));
+        }
+        return ResponseEntity.ok(adminAuditService.getAll());
+    }
+
+    // ========== RF30: Configuración del sistema ==========
+
+    @GetMapping("/config")
+    public ResponseEntity<List<SystemConfigResponse>> getSystemConfig() {
+        return ResponseEntity.ok(systemConfigService.getAll());
+    }
+
+    @GetMapping("/config/{key}")
+    public ResponseEntity<?> getSystemConfigKey(@PathVariable String key) {
+        try {
+            return ResponseEntity.ok(systemConfigService.getByKey(key));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/config/" + key);
+        }
+    }
+
+    @PutMapping("/config/{key}")
+    public ResponseEntity<?> updateSystemConfig(
+            @PathVariable String key,
+            @Valid @RequestBody UpdateSystemConfigRequest request,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        try {
+            return ResponseEntity.ok(systemConfigService.update(
+                    key, request, adminEmail, clientIp(httpRequest)));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/config/" + key);
+        }
+    }
+
+    // ========== Helpers ==========
+
     private ResponseEntity<ErrorResponse> buildErrorResponse(Exception e, String path) {
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
@@ -196,10 +251,15 @@ public class AdminUserController {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
-    /**
-     * Decodifica un email codificado en URL.
-     */
     private static String decodeEmail(String email) {
         return URLDecoder.decode(email, StandardCharsets.UTF_8);
+    }
+
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

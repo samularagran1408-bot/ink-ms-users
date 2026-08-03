@@ -1,11 +1,16 @@
 package com.inklusport.users.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+/**
+ * RF27: asignar rol por ID o por nombre (ADMIN, USUARIO, ORGANIZADOR, ENTRENADOR).
+ * Debe enviarse al menos uno de los dos campos.
+ */
 @Data
 public class AssignRoleRequest {
-    
-    @NotNull(message = "El ID del rol es obligatorio")
+
     private Long roleId;
+
+    /** Nombre del rol (alternativa a roleId). */
+    private String roleName;
 }

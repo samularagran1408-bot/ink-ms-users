@@ -21,9 +21,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class UserActivityService {
 
-    /**
-     * Se inyectan dependencias importadas de los repositorios
-     */
     private final UserActivityRepository userActivityRepository;
     private final UserRepository userRepository;
 
@@ -34,11 +31,11 @@ public class UserActivityService {
     public void logActivity(String email, String action, String details, String ipAddress) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        
+
         UserActivity activity = new UserActivity();
         activity.setUser(user);
         activity.setAction(action);
-        activity.setDetails(details != null ? details : "{}");
+        activity.setDetails(toValidJsonDetails(details));
         activity.setIpAddress(ipAddress);
 
         userActivityRepository.save(activity);
@@ -46,22 +43,53 @@ public class UserActivityService {
     }
 
     /**
-     * Consulta actividades del usuario en orden descendente por fecha.
+     * Registra actividad sin propagar fallos (p. ej. tras actualizar perfil).
      */
+    public void logActivityQuietly(String email, String action, String details, String ipAddress) {
+        try {
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user == null) {
+                log.warn("No se registró actividad {}: usuario {} no encontrado", action, email);
+                return;
+            }
+
+            UserActivity activity = new UserActivity();
+            activity.setUser(user);
+            activity.setAction(action);
+            activity.setDetails(toValidJsonDetails(details));
+            activity.setIpAddress(ipAddress);
+            userActivityRepository.saveAndFlush(activity);
+        } catch (Exception ex) {
+            log.warn("No se pudo registrar actividad {} para {}: {}", action, email, ex.getMessage());
+        }
+    }
+
+    private String toValidJsonDetails(String details) {
+        if (details == null || details.isBlank()) {
+            return "{}";
+        }
+        String trimmed = details.trim();
+        if ((trimmed.startsWith("{") && trimmed.endsWith("}"))
+                || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+            return trimmed;
+        }
+        String escaped = trimmed
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
+        return "{\"message\":\"" + escaped + "\"}";
+    }
+
     @Transactional(readOnly = true)
     public List<UserActivityResponse> getUserActivities(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-    
+
         return userActivityRepository.findByUserIdOrderByCreatedAtDesc(user.getId())
                 .stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Convierte entidad UserActivity a DTO de respuesta.
-     */
     private UserActivityResponse convertToResponse(UserActivity activity) {
         return UserActivityResponse.builder()
                 .id(activity.getId())

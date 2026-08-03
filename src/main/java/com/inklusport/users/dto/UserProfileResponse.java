@@ -27,6 +27,9 @@ public class UserProfileResponse {
     private String supportPreference;
     private String supportPreferenceNotes;
     private Boolean isActive;
+    private String blockReason;
+    private LocalDateTime blockedUntil;
+    private Boolean blockedPermanently;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<String> roles;

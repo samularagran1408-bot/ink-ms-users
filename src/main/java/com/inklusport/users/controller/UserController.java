@@ -32,7 +32,6 @@ public class UserController {
     private final UserService userService;
     private final UserActivityService userActivityService;
 
-    // ===== Bloque 1: Gestion del perfil =====
     /**
      * Crea el perfil base del usuario autenticado.
      * Si llegan campos adicionales, completa los datos en la misma operacion.
@@ -84,17 +83,18 @@ public class UserController {
                                               HttpServletRequest httpRequest) {
         try {
             UserProfileResponse response = userService.updateUserProfile(email, request);
-
-            userActivityService.logActivity(email, "UPDATE_PROFILE", 
-                "Perfil actualizado", httpRequest.getRemoteAddr());
-
+            // La auditoría no debe afectar la respuesta del update.
+            userActivityService.logActivityQuietly(
+                    email,
+                    "UPDATE_PROFILE",
+                    "{\"message\":\"Perfil actualizado\"}",
+                    httpRequest.getRemoteAddr());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return buildErrorResponse(e, "/api/users/perfil");
         }
     }
-
-    // ===== Bloque 2: Historial de actividad =====
+ 
     /**
      * Obtiene el historial de actividades del usuario autenticado.
      */
@@ -108,7 +108,6 @@ public class UserController {
         }
     }
 
-    // ===== Bloque 3: Consulta puntual =====
     /**
      * Consulta un perfil por identificador.
      */

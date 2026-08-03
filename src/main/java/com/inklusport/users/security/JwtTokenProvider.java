@@ -96,9 +96,8 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Valida el token JWT para asegurarse de que es correcto y no ha expirado
-     * @param token
-     * @return
+     * Valida el token JWT contra auth-ms. Si auth no está disponible,
+     * cae a validación local de firma/expiración (útil en tests y degradación controlada).
      */
     public boolean validateToken(String token) {
         if (token == null || token.isBlank()) {
@@ -124,8 +123,8 @@ public class JwtTokenProvider {
         } catch (HttpStatusCodeException e) {
             return false;
         } catch (Exception e) {
-            log.warn("No se pudo validar token contra auth-ms: {}", e.getMessage());
-            return false;
+            log.warn("No se pudo validar token contra auth-ms, usando validación local: {}", e.getMessage());
+            return validateTokenLocally(token);
         }
     }
 

@@ -1,7 +1,9 @@
 package com.inklusport.users.service;
 
+import com.inklusport.users.dto.BlockUserRequest;
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
 import com.inklusport.users.dto.UpdateProfileRequest;
+import com.inklusport.users.dto.UserAccessStatusResponse;
 import com.inklusport.users.dto.UserProfileResponse;
 import com.inklusport.users.entity.Role;
 import com.inklusport.users.entity.User;
@@ -10,6 +12,7 @@ import com.inklusport.users.entity.UserRoleId;
 import com.inklusport.users.repository.RoleRepository;
 import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.repository.UserRoleRepository;
+import com.inklusport.users.util.DisabilityProfileRules;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
+    private final AdminAuditService adminAuditService;
 
     // CRUD BÁSICO
 
@@ -62,9 +66,14 @@ public class UserService {
         user.setEmail(request.getEmail().trim());
         user.setFullName(request.getFullName().trim());
         user.setActive(true);
-        user.setDisability(trimToNull(request.getDisability()));
-        user.setCompanionFullName(trimToNull(request.getCompanionFullName()));
-        user.setCompanionPhone(trimToNull(request.getCompanionPhone()));
+        String disability = trimToNull(request.getDisability());
+        String companionFullName = trimToNull(request.getCompanionFullName());
+        String companionPhone = trimToNull(request.getCompanionPhone());
+        DisabilityProfileRules.assertCompanionPresent(disability, companionFullName, companionPhone);
+
+        user.setDisability(disability);
+        user.setCompanionFullName(companionFullName);
+        user.setCompanionPhone(companionPhone);
         user.setCompanionRelationship(trimToNull(request.getCompanionRelationship()));
         user.setCompanionEmail(trimToNull(request.getCompanionEmail()));
         user.setSupportPreference(trimToNull(request.getSupportPreference()));
@@ -124,16 +133,21 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         if (request.getFullName() != null) user.setFullName(request.getFullName());
-        if (request.getPhone() != null) user.setPhone(request.getPhone());
-        if (request.getProfilePicture() != null) user.setProfilePicture(request.getProfilePicture());
+        if (request.getPhone() != null) user.setPhone(trimToNull(request.getPhone()));
+        if (request.getProfilePicture() != null) user.setProfilePicture(trimToNull(request.getProfilePicture()));
         if (request.getBio() != null) user.setBio(request.getBio());
-        if (request.getDisability() != null) user.setDisability(request.getDisability());
-        if (request.getCompanionFullName() != null) user.setCompanionFullName(request.getCompanionFullName());
-        if (request.getCompanionPhone() != null) user.setCompanionPhone(request.getCompanionPhone());
-        if (request.getCompanionRelationship() != null) user.setCompanionRelationship(request.getCompanionRelationship());
-        if (request.getCompanionEmail() != null) user.setCompanionEmail(request.getCompanionEmail());
-        if (request.getSupportPreference() != null) user.setSupportPreference(request.getSupportPreference());
-        if (request.getSupportPreferenceNotes() != null) user.setSupportPreferenceNotes(request.getSupportPreferenceNotes());
+        if (request.getDisability() != null) user.setDisability(trimToNull(request.getDisability()));
+        if (request.getCompanionFullName() != null) user.setCompanionFullName(trimToNull(request.getCompanionFullName()));
+        if (request.getCompanionPhone() != null) user.setCompanionPhone(trimToNull(request.getCompanionPhone()));
+        if (request.getCompanionRelationship() != null) user.setCompanionRelationship(trimToNull(request.getCompanionRelationship()));
+        if (request.getCompanionEmail() != null) user.setCompanionEmail(trimToNull(request.getCompanionEmail()));
+        if (request.getSupportPreference() != null) user.setSupportPreference(trimToNull(request.getSupportPreference()));
+        if (request.getSupportPreferenceNotes() != null) user.setSupportPreferenceNotes(trimToNull(request.getSupportPreferenceNotes()));
+
+        DisabilityProfileRules.assertCompanionPresent(
+                user.getDisability(),
+                user.getCompanionFullName(),
+                user.getCompanionPhone());
 
         User updatedUser = userRepository.save(user);
         log.info("Perfil actualizado: {}", email);
@@ -238,18 +252,119 @@ public class UserService {
         userRepository.save(user);
     }
 
-    // MÉTODOS DE ACTIVACIÓN/DESACTIVACIÓN
+    // MÉTODOS DE ACTIVACIÓN / BLOQUEO (RF28)
 
     @Transactional
-    public void deactivateUser(String email) {
-        userRepository.deactivateUser(email);
-        log.info("Usuario desactivado: {}", email);
+    public UserProfileResponse deactivateUser(String email, BlockUserRequest request,
+                                              String adminEmail, String ipAddress) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + email));
+
+        boolean permanent = request == null || request.isPermanent() || request.getBlockedUntil() == null;
+        LocalDateTime until = permanent ? null : request.getBlockedUntil();
+        if (!permanent && until.isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("blockedUntil debe ser una fecha/hora futura");
+        }
+
+        String reason = request != null && request.getReason() != null && !request.getReason().isBlank()
+                ? request.getReason().trim()
+                : (permanent ? "Desactivado permanentemente por administrador" : "Desactivado temporalmente por administrador");
+
+        user.setActive(false);
+        user.setBlockedPermanently(permanent);
+        user.setBlockedUntil(until);
+        user.setBlockReason(reason);
+        User saved = userRepository.save(user);
+
+        adminAuditService.log(
+                adminEmail,
+                permanent ? "BLOCK_USER_PERMANENT" : "BLOCK_USER_TEMPORARY",
+                email,
+                saved.getId(),
+                "{\"reason\":\"" + escapeJson(reason) + "\",\"blockedUntil\":"
+                        + (until != null ? "\"" + until + "\"" : "null") + "}",
+                ipAddress
+        );
+
+        log.info("Usuario desactivado ({}): {}", permanent ? "permanente" : "temporal", email);
+        return convertToResponse(saved);
     }
 
     @Transactional
-    public void activateUser(String email) {
-        userRepository.activateUser(email);
+    public UserProfileResponse activateUser(String email, String adminEmail, String ipAddress) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + email));
+
+        user.setActive(true);
+        user.setBlockedPermanently(false);
+        user.setBlockedUntil(null);
+        user.setBlockReason(null);
+        User saved = userRepository.save(user);
+
+        adminAuditService.log(adminEmail, "ACTIVATE_USER", email, saved.getId(), "{}", ipAddress);
         log.info("Usuario activado: {}", email);
+        return convertToResponse(saved);
+    }
+
+    /**
+     * RF28 / auth: estado de acceso efectivo (reactiva bloqueos temporales vencidos).
+     */
+    @Transactional
+    public UserAccessStatusResponse getAccessStatus(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + email));
+
+        clearExpiredTemporaryBlock(user);
+
+        boolean allowed = user.isActive();
+        String message = allowed
+                ? "Acceso permitido"
+                : (user.isBlockedPermanently()
+                ? "Usuario bloqueado permanentemente"
+                : "Usuario bloqueado temporalmente");
+
+        if (!allowed && user.getBlockReason() != null) {
+            message = message + ": " + user.getBlockReason();
+        }
+
+        return UserAccessStatusResponse.builder()
+                .email(user.getEmail())
+                .allowed(allowed)
+                .active(user.isActive())
+                .permanentlyBlocked(user.isBlockedPermanently())
+                .blockedUntil(user.getBlockedUntil())
+                .blockReason(user.getBlockReason())
+                .message(message)
+                .build();
+    }
+
+    private void clearExpiredTemporaryBlock(User user) {
+        if (user.isActive()) {
+            return;
+        }
+        if (user.isBlockedPermanently()) {
+            return;
+        }
+        if (user.getBlockedUntil() != null && user.getBlockedUntil().isBefore(LocalDateTime.now())) {
+            user.setActive(true);
+            user.setBlockedUntil(null);
+            user.setBlockReason(null);
+            user.setBlockedPermanently(false);
+            userRepository.save(user);
+            adminAuditService.log("SYSTEM", "AUTO_UNBLOCK_EXPIRED", user.getEmail(), user.getId(),
+                    "{}", null);
+            log.info("Bloqueo temporal expirado; usuario reactivado: {}", user.getEmail());
+        }
+    }
+
+    @Transactional
+    public UserProfileResponse adminUpdateUser(String email, UpdateProfileRequest request,
+                                               String adminEmail, String ipAddress) {
+        UserProfileResponse updated = updateUserProfile(email, request);
+        User user = userRepository.findByEmail(email).orElseThrow();
+        adminAuditService.log(adminEmail, "UPDATE_USER_PROFILE", email, user.getId(),
+                "{\"fields\":\"profile\"}", ipAddress);
+        return updated;
     }
 
     // MÉTODOS DE LISTADO
@@ -269,8 +384,19 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public List<UserProfileResponse> getInactiveUsers() {
+        return userRepository.findByIsActiveFalse().stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public boolean userExists(String email) {
         return userRepository.existsByEmail(email);
+    }
+
+    private static String escapeJson(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     // MAPEO A DTO
@@ -293,6 +419,9 @@ public class UserService {
                 .supportPreference(user.getSupportPreference())
                 .supportPreferenceNotes(user.getSupportPreferenceNotes())
                 .isActive(user.isActive())
+                .blockReason(user.getBlockReason())
+                .blockedUntil(user.getBlockedUntil())
+                .blockedPermanently(user.isBlockedPermanently())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .roles(roles)

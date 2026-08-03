@@ -1,9 +1,10 @@
 package com.inklusport.users.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -14,7 +15,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "user_profile")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class User {
@@ -32,8 +34,23 @@ public class User {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    /**
+     * Wrapper (no primitivo): en BD antiguas la columna puede ser NULL y Hibernate
+     * no puede asignar null a boolean. Los accessors is/set tratan null como default.
+     */
     @Column(name = "is_active")
-    private boolean isActive;
+    private Boolean isActive = true;
+
+    /** RF28: motivo del bloqueo/desactivación. */
+    @Column(name = "block_reason", length = 500)
+    private String blockReason;
+
+    /** RF28: fin del bloqueo temporal; null + isActive=false + blockedPermanently = permanente. */
+    @Column(name = "blocked_until")
+    private LocalDateTime blockedUntil;
+
+    @Column(name = "blocked_permanently")
+    private Boolean blockedPermanently = false;
 
     @Column(name = "profile_picture", columnDefinition = "TEXT")
     private String profilePicture;
@@ -44,9 +61,6 @@ public class User {
     @Column(name = "disability", length = 100)
     private String disability;
 
-    /**
-     * Acompañante de apoyo (obligatorio en registro si disability = MOTRIZ).
-     */
     @Column(name = "companion_full_name", length = 150)
     private String companionFullName;
 
@@ -59,68 +73,54 @@ public class User {
     @Column(name = "companion_email", length = 100)
     private String companionEmail;
 
-    /**
-     * Preferencia de apoyo comunicativo (obligatoria en registro si disability = AUDITIVA).
-     */
     @Column(name = "support_preference", length = 50)
     private String supportPreference;
 
     @Column(name = "support_preference_notes", length = 255)
     private String supportPreferenceNotes;
 
-    /**
-     * CAMPOS DE VERIFICACIÓN
-     */
+    @Column(name = "email_verified")
+    private Boolean emailVerified = false;
 
-    /**
-     * Verificación básica
-     */
-    @Column(name = "email_verified", nullable = false)
-    private boolean emailVerified = false;
+    @Column(name = "phone_verified")
+    private Boolean phoneVerified = false;
 
-    @Column(name = "phone_verified", nullable = false)
-    private boolean phoneVerified = false;
-
-    // Organizador
     @Column(name = "events_attended")
-    private int eventsAttended = 0;
+    private Integer eventsAttended = 0;
 
     @Column(name = "events_created")
-    private int eventsCreated = 0;
+    private Integer eventsCreated = 0;
 
     @Column(name = "platform_days")
-    private int platformDays = 0;
+    private Integer platformDays = 0;
 
     @Column(name = "test_event_created")
-    private boolean testEventCreated = false;
+    private Boolean testEventCreated = false;
 
     @Column(name = "organizer_quiz_score")
     private Double organizerQuizScore;
 
     @Column(name = "organizer_quiz_passed")
-    private boolean organizerQuizPassed = false;
+    private Boolean organizerQuizPassed = false;
 
     @Column(name = "organizer_verification_status")
     @Enumerated(EnumType.STRING)
     private VerificationStatus organizerVerificationStatus = VerificationStatus.pending;
 
-    /**
-     * Entrenador
-     */
     @Column(name = "certification_file")
     private String certificationFile;
 
     @Column(name = "experience_months")
-    private int experienceMonths = 0;
+    private Integer experienceMonths = 0;
 
     @Column(name = "events_as_trainer")
-    private int eventsAsTrainer = 0;
+    private Integer eventsAsTrainer = 0;
 
     @Column(name = "trainer_quiz_score")
     private Double trainerQuizScore;
 
     @Column(name = "trainer_quiz_passed")
-    private boolean trainerQuizPassed = false;
+    private Boolean trainerQuizPassed = false;
 
     @Column(name = "identity_document")
     private String identityDocument;
@@ -132,9 +132,6 @@ public class User {
     @Column(name = "verified_roles")
     private String verifiedRoles = "";
 
-    /**
-     * Campos de auditoría
-     */
     @CreationTimestamp
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -143,18 +140,155 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    /**
-     * Relaciones
-     */
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserRole> roles = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserActivity> activities = new ArrayList<>();
 
-    /**
-     * ENUM INTERNO
-     */
+    @PrePersist
+    @PreUpdate
+    private void normalizeNullFlags() {
+        if (isActive == null) {
+            isActive = true;
+        }
+        if (blockedPermanently == null) {
+            blockedPermanently = false;
+        }
+        if (emailVerified == null) {
+            emailVerified = false;
+        }
+        if (phoneVerified == null) {
+            phoneVerified = false;
+        }
+        if (testEventCreated == null) {
+            testEventCreated = false;
+        }
+        if (organizerQuizPassed == null) {
+            organizerQuizPassed = false;
+        }
+        if (trainerQuizPassed == null) {
+            trainerQuizPassed = false;
+        }
+        if (eventsAttended == null) {
+            eventsAttended = 0;
+        }
+        if (eventsCreated == null) {
+            eventsCreated = 0;
+        }
+        if (platformDays == null) {
+            platformDays = 0;
+        }
+        if (experienceMonths == null) {
+            experienceMonths = 0;
+        }
+        if (eventsAsTrainer == null) {
+            eventsAsTrainer = 0;
+        }
+    }
+
+    @PostLoad
+    private void coerceNullFlagsAfterLoad() {
+        normalizeNullFlags();
+    }
+
+    /** Compatibilidad: el código llama isActive()/setActive() como si fuera primitivo. */
+    public boolean isActive() {
+        return !Boolean.FALSE.equals(isActive);
+    }
+
+    public void setActive(boolean active) {
+        this.isActive = active;
+    }
+
+    public boolean isBlockedPermanently() {
+        return Boolean.TRUE.equals(blockedPermanently);
+    }
+
+    public void setBlockedPermanently(boolean blockedPermanently) {
+        this.blockedPermanently = blockedPermanently;
+    }
+
+    public boolean isEmailVerified() {
+        return Boolean.TRUE.equals(emailVerified);
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
+
+    public boolean isPhoneVerified() {
+        return Boolean.TRUE.equals(phoneVerified);
+    }
+
+    public void setPhoneVerified(boolean phoneVerified) {
+        this.phoneVerified = phoneVerified;
+    }
+
+    public boolean isTestEventCreated() {
+        return Boolean.TRUE.equals(testEventCreated);
+    }
+
+    public void setTestEventCreated(boolean testEventCreated) {
+        this.testEventCreated = testEventCreated;
+    }
+
+    public boolean isOrganizerQuizPassed() {
+        return Boolean.TRUE.equals(organizerQuizPassed);
+    }
+
+    public void setOrganizerQuizPassed(boolean organizerQuizPassed) {
+        this.organizerQuizPassed = organizerQuizPassed;
+    }
+
+    public boolean isTrainerQuizPassed() {
+        return Boolean.TRUE.equals(trainerQuizPassed);
+    }
+
+    public void setTrainerQuizPassed(boolean trainerQuizPassed) {
+        this.trainerQuizPassed = trainerQuizPassed;
+    }
+
+    public int getEventsAttended() {
+        return eventsAttended == null ? 0 : eventsAttended;
+    }
+
+    public void setEventsAttended(int eventsAttended) {
+        this.eventsAttended = eventsAttended;
+    }
+
+    public int getEventsCreated() {
+        return eventsCreated == null ? 0 : eventsCreated;
+    }
+
+    public void setEventsCreated(int eventsCreated) {
+        this.eventsCreated = eventsCreated;
+    }
+
+    public int getPlatformDays() {
+        return platformDays == null ? 0 : platformDays;
+    }
+
+    public void setPlatformDays(int platformDays) {
+        this.platformDays = platformDays;
+    }
+
+    public int getExperienceMonths() {
+        return experienceMonths == null ? 0 : experienceMonths;
+    }
+
+    public void setExperienceMonths(int experienceMonths) {
+        this.experienceMonths = experienceMonths;
+    }
+
+    public int getEventsAsTrainer() {
+        return eventsAsTrainer == null ? 0 : eventsAsTrainer;
+    }
+
+    public void setEventsAsTrainer(int eventsAsTrainer) {
+        this.eventsAsTrainer = eventsAsTrainer;
+    }
+
     public enum VerificationStatus {
         pending, approved, rejected
     }

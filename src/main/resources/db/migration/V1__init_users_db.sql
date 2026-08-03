@@ -38,7 +38,7 @@ CREATE TABLE user_activity (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     user_id CHAR(36) NOT NULL,
     action VARCHAR(100) NOT NULL,
-    details JSON,
+    details TEXT,
     ip_address VARCHAR(45),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES user_profile(id)
