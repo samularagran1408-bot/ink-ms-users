@@ -36,7 +36,6 @@ public class AdminUserController {
     private final AdminAuditService adminAuditService;
     private final SystemConfigService systemConfigService;
 
-    // ========== RF26: Consulta y edición de usuarios ==========
 
     @GetMapping
     public ResponseEntity<List<UserProfileResponse>> getAllUsers() {
@@ -88,7 +87,6 @@ public class AdminUserController {
         return ResponseEntity.ok(userService.userExists(decodeEmail(email)));
     }
 
-    // ========== RF28: Bloqueo / activación ==========
 
     @PostMapping("/{email}/deactivate")
     public ResponseEntity<?> deactivateUser(
@@ -135,7 +133,6 @@ public class AdminUserController {
         }
     }
 
-    // ========== RF27: Roles ==========
 
     @GetMapping("/roles")
     public ResponseEntity<List<RoleResponse>> getAllRoles() {
@@ -193,8 +190,7 @@ public class AdminUserController {
         }
     }
 
-    // ========== RF29: Historial de acciones administrativas ==========
-
+    
     @GetMapping("/audit")
     public ResponseEntity<List<AdminAuditLogResponse>> getAuditLog(
             @RequestParam(required = false) String targetEmail,
@@ -208,8 +204,7 @@ public class AdminUserController {
         return ResponseEntity.ok(adminAuditService.getAll());
     }
 
-    // ========== RF30: Configuración del sistema ==========
-
+    
     @GetMapping("/config")
     public ResponseEntity<List<SystemConfigResponse>> getSystemConfig() {
         return ResponseEntity.ok(systemConfigService.getAll());
@@ -238,7 +233,6 @@ public class AdminUserController {
         }
     }
 
-    // ========== Helpers ==========
 
     private ResponseEntity<ErrorResponse> buildErrorResponse(Exception e, String path) {
         ErrorResponse error = ErrorResponse.builder()
