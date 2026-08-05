@@ -24,6 +24,13 @@ auth:
   service:
     url: http://auth-service:3001
 
+accessibility:
+  service:
+    url: ${ACCESSIBILITY_SERVICE_URL:http://accessibility-service:3004}
+
+notifications:
+  admin-emails: ${NOTIFICATION_ADMIN_EMAILS:}
+
 security:
   basic:
     enabled: false

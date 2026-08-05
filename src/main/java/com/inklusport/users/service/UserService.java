@@ -2,6 +2,8 @@ package com.inklusport.users.service;
 
 import com.inklusport.users.dto.BlockUserRequest;
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
+import com.inklusport.users.dto.QuizPrepRequest;
+import com.inklusport.users.dto.QuizPrepResponse;
 import com.inklusport.users.dto.UpdateProfileRequest;
 import com.inklusport.users.dto.UserAccessStatusResponse;
 import com.inklusport.users.dto.UserProfileResponse;
@@ -9,6 +11,7 @@ import com.inklusport.users.entity.Role;
 import com.inklusport.users.entity.User;
 import com.inklusport.users.entity.UserRole;
 import com.inklusport.users.entity.UserRoleId;
+import com.inklusport.users.exception.SilentAccessDeniedException;
 import com.inklusport.users.repository.RoleRepository;
 import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.repository.UserRoleRepository;
@@ -19,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,8 +35,8 @@ public class UserService {
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
     private final AdminAuditService adminAuditService;
+    private final AdminNotificationService adminNotificationService;
 
-    // CRUD BÁSICO
 
     @Transactional
     public UserProfileResponse createUserProfile(String email, String fullName) {
@@ -84,6 +87,12 @@ public class UserService {
 
         log.info("Perfil creado desde registro: {} (disability={}, supportPreference={})",
                 savedUser.getEmail(), savedUser.getDisability(), savedUser.getSupportPreference());
+
+        try {
+            adminNotificationService.notifyAdminsNewUserRegistered(savedUser.getEmail(), savedUser.getFullName());
+        } catch (Exception e) {
+            log.warn("No se pudo notificar a admins del nuevo registro {}: {}", savedUser.getEmail(), e.getMessage());
+        }
 
         return convertToResponse(savedUser);
     }
@@ -155,30 +164,29 @@ public class UserService {
         return convertToResponse(updatedUser);
     }
 
-    // MÉTODOS PARA VERIFICACIÓN
 
+    /**
+     * Años mínimos de experiencia declarados antes del quiz.
+     */
+    public static final int MIN_QUIZ_EXPERIENCE_YEARS = 3;
+
+    /**
+     * Reintentos fallidos permitidos por rol.
+     */
+    public static final int MAX_QUIZ_ATTEMPTS = 3;
+
+    /**
+     * Verifica ORGANIZADOR: el quiz aprobado es el único requisito operativo.
+     */
     @Transactional
     public UserProfileResponse verifyOrganizer(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        long days = ChronoUnit.DAYS.between(user.getCreatedAt(), LocalDateTime.now());
-        user.setPlatformDays((int) days);
-
-        boolean meetsRequirements =
-                user.getEventsAttended() >= 5 &&
-                user.isTestEventCreated() &&
-                user.isEmailVerified() &&
-                user.isPhoneVerified() &&
-                days >= 30 &&
-                user.isOrganizerQuizPassed();
-
-        if (meetsRequirements) {
+        if (user.isOrganizerQuizPassed()) {
             user.setOrganizerVerificationStatus(User.VerificationStatus.approved);
-            if (!user.getVerifiedRoles().contains("ORGANIZADOR")) {
-                user.setVerifiedRoles(user.getVerifiedRoles() + ",ORGANIZADOR");
-            }
-            log.info("Usuario {} verificado como ORGANIZADOR", userId);
+            appendVerifiedRole(user, "ORGANIZADOR");
+            log.info("Usuario {} verificado como ORGANIZADOR (quiz)", userId);
         } else {
             user.setOrganizerVerificationStatus(User.VerificationStatus.rejected);
             log.info("Usuario {} NO cumple requisitos para ORGANIZADOR", userId);
@@ -188,24 +196,18 @@ public class UserService {
         return convertToResponse(updatedUser);
     }
 
+    /**
+     * Verifica ENTRENADOR: el quiz aprobado es el único requisito operativo.
+     */
     @Transactional
     public UserProfileResponse verifyTrainer(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        boolean meetsRequirements =
-                user.getCertificationFile() != null &&
-                user.getExperienceMonths() >= 6 &&
-                user.getEventsAsTrainer() >= 3 &&
-                user.isTrainerQuizPassed() &&
-                user.getIdentityDocument() != null;
-
-        if (meetsRequirements) {
+        if (user.isTrainerQuizPassed()) {
             user.setTrainerVerificationStatus(User.VerificationStatus.approved);
-            if (!user.getVerifiedRoles().contains("ENTRENADOR")) {
-                user.setVerifiedRoles(user.getVerifiedRoles() + ",ENTRENADOR");
-            }
-            log.info("Usuario {} verificado como ENTRENADOR", userId);
+            appendVerifiedRole(user, "ENTRENADOR");
+            log.info("Usuario {} verificado como ENTRENADOR (quiz)", userId);
         } else {
             user.setTrainerVerificationStatus(User.VerificationStatus.rejected);
             log.info("Usuario {} NO cumple requisitos para ENTRENADOR", userId);
@@ -215,6 +217,9 @@ public class UserService {
         return convertToResponse(updatedUser);
     }
 
+    /**
+     * Incrementa eventos asistidos del perfil (llamado desde sports).
+     */
     @Transactional
     public void incrementEventsAttended(String userId) {
         User user = userRepository.findById(userId)
@@ -223,6 +228,9 @@ public class UserService {
         userRepository.save(user);
     }
 
+    /**
+     * Incrementa eventos creados y marca testEventCreated si aplica.
+     */
     @Transactional
     public void incrementEventsCreated(String userId) {
         User user = userRepository.findById(userId)
@@ -234,21 +242,109 @@ public class UserService {
         userRepository.save(user);
     }
 
+    /**
+     * Guarda experiencia y disciplinas antes del quiz.
+     * Si los años son menores al mínimo, bloquea la cuenta sin revelar el motivo.
+     */
     @Transactional
-    public void saveOrganizerQuizScore(String userId, double score) {
+    public QuizPrepResponse prepareQuiz(String userId, String role, QuizPrepRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        user.setOrganizerQuizScore(score);
-        user.setOrganizerQuizPassed(score >= 70.0);
+
+        String normalizedRole = normalizeQuizRole(role);
+        if (!user.isActive()) {
+            throw new SilentAccessDeniedException();
+        }
+
+        int years = request.getExperienceYears() == null ? 0 : request.getExperienceYears();
+        if (years < MIN_QUIZ_EXPERIENCE_YEARS) {
+            log.warn("Bloqueo silencioso por experiencia insuficiente para usuario {} (rol {})", userId, normalizedRole);
+            user.setActive(false);
+            user.setBlockedPermanently(true);
+            user.setBlockedUntil(null);
+            user.setBlockReason(null);
+            userRepository.save(user);
+            throw new SilentAccessDeniedException();
+        }
+
+        if (isQuizPassed(user, normalizedRole)) {
+            return buildPrepResponse(user, normalizedRole, "Quiz ya aprobado.");
+        }
+        if (attemptsUsed(user, normalizedRole) >= MAX_QUIZ_ATTEMPTS) {
+            throw new RuntimeException("Has agotado los intentos de verificación.");
+        }
+
+        user.setExperienceMonths(years * 12);
+        user.setQuizDisciplines(serializeDisciplineIds(request.getDisciplineSportIds()));
         userRepository.save(user);
+
+        return buildPrepResponse(user, normalizedRole,
+                "Datos guardados. Puedes iniciar el quiz.");
     }
 
-    @Transactional
-    public void saveTrainerQuizScore(String userId, double score) {
+    /**
+     * Consulta el estado de prep/intentos/aprobación del quiz para un rol.
+     */
+    @Transactional(readOnly = true)
+    public QuizPrepResponse getQuizPrepStatus(String userId, String role) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        user.setTrainerQuizScore(score);
-        user.setTrainerQuizPassed(score >= 75.0);
+        return buildPrepResponse(user, normalizeQuizRole(role), null);
+    }
+
+    /**
+     * Persiste el puntaje del quiz de organizador (aprueba con score >= 70).
+     */
+    @Transactional
+    public void saveOrganizerQuizScore(String userId, double score) {
+        applyQuizScore(userId, "ORGANIZADOR", score, 70.0);
+    }
+
+    /**
+     * Persiste el puntaje del quiz de entrenador (aprueba con score >= 75).
+     */
+    @Transactional
+    public void saveTrainerQuizScore(String userId, double score) {
+        applyQuizScore(userId, "ENTRENADOR", score, 75.0);
+    }
+
+    /**
+     * Aplica puntaje, marca aprobado o incrementa intentos fallidos según el umbral.
+     */
+    private void applyQuizScore(String userId, String role, double score, double threshold) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (!user.isActive()) {
+            throw new SilentAccessDeniedException();
+        }
+        if (isQuizPassed(user, role)) {
+            return;
+        }
+        if (attemptsUsed(user, role) >= MAX_QUIZ_ATTEMPTS) {
+            throw new RuntimeException("Has agotado los intentos de verificación.");
+        }
+
+        boolean passed = score >= threshold;
+        if ("ORGANIZADOR".equals(role)) {
+            user.setOrganizerQuizScore(score);
+            user.setOrganizerQuizPassed(passed);
+            if (passed) {
+                user.setOrganizerVerificationStatus(User.VerificationStatus.approved);
+                appendVerifiedRole(user, "ORGANIZADOR");
+            } else {
+                user.setOrganizerQuizAttempts(user.getOrganizerQuizAttempts() + 1);
+            }
+        } else {
+            user.setTrainerQuizScore(score);
+            user.setTrainerQuizPassed(passed);
+            if (passed) {
+                user.setTrainerVerificationStatus(User.VerificationStatus.approved);
+                appendVerifiedRole(user, "ENTRENADOR");
+            } else {
+                user.setTrainerQuizAttempts(user.getTrainerQuizAttempts() + 1);
+            }
+        }
         userRepository.save(user);
     }
 
@@ -308,6 +404,7 @@ public class UserService {
 
     /**
      * RF28 / auth: estado de acceso efectivo (reactiva bloqueos temporales vencidos).
+     * Solo expone motivo si el admin lo registró; los bloqueos silenciosos van sin reason.
      */
     @Transactional
     public UserAccessStatusResponse getAccessStatus(String email) {
@@ -323,7 +420,7 @@ public class UserService {
                 ? "Usuario bloqueado permanentemente"
                 : "Usuario bloqueado temporalmente");
 
-        if (!allowed && user.getBlockReason() != null) {
+        if (!allowed && user.getBlockReason() != null && !user.getBlockReason().isBlank()) {
             message = message + ": " + user.getBlockReason();
         }
 
@@ -401,6 +498,107 @@ public class UserService {
 
     // MAPEO A DTO
 
+    /**
+     * Añade un rol verificado a la lista serializada del usuario si aún no está.
+     */
+    private void appendVerifiedRole(User user, String role) {
+        String current = user.getVerifiedRoles() == null ? "" : user.getVerifiedRoles();
+        if (!current.contains(role)) {
+            user.setVerifiedRoles(current.isBlank() ? role : current + "," + role);
+        }
+    }
+
+    /**
+     * Normaliza alias de rol (organizer/trainer/coach) a ORGANIZADOR o ENTRENADOR.
+     */
+    private String normalizeQuizRole(String role) {
+        String normalized = role == null ? "" : role.trim().toUpperCase();
+        if ("ORGANIZER".equals(normalized) || "ORGANIZADOR".equals(normalized)) {
+            return "ORGANIZADOR";
+        }
+        if ("TRAINER".equals(normalized) || "COACH".equals(normalized) || "ENTRENADOR".equals(normalized)) {
+            return "ENTRENADOR";
+        }
+        throw new RuntimeException("Rol de quiz inválido. Usa ORGANIZADOR o ENTRENADOR.");
+    }
+
+    /**
+     * Indica si el usuario ya aprobó el quiz del rol indicado.
+     */
+    private boolean isQuizPassed(User user, String role) {
+        return "ORGANIZADOR".equals(role) ? user.isOrganizerQuizPassed() : user.isTrainerQuizPassed();
+    }
+
+    /**
+     * Devuelve los intentos fallidos consumidos para el rol.
+     */
+    private int attemptsUsed(User user, String role) {
+        return "ORGANIZADOR".equals(role) ? user.getOrganizerQuizAttempts() : user.getTrainerQuizAttempts();
+    }
+
+    /**
+     * Serializa IDs de disciplinas a una cadena separada por comas.
+     */
+    private String serializeDisciplineIds(List<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        return ids.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+
+    /**
+     * Parsea la cadena de disciplinas persistida a una lista de IDs.
+     */
+    private List<Integer> parseDisciplineIds(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<Integer> ids = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                ids.add(Integer.parseInt(trimmed));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Arma la respuesta de prep con intentos restantes y si puede iniciar el quiz.
+     */
+    private QuizPrepResponse buildPrepResponse(User user, String role, String message) {
+        int used = attemptsUsed(user, role);
+        int remaining = Math.max(0, MAX_QUIZ_ATTEMPTS - used);
+        boolean passed = isQuizPassed(user, role);
+        boolean canStart = user.isActive() && !passed && remaining > 0
+                && user.getExperienceMonths() >= MIN_QUIZ_EXPERIENCE_YEARS * 12
+                && user.getQuizDisciplines() != null && !user.getQuizDisciplines().isBlank();
+
+        return QuizPrepResponse.builder()
+                .role(role)
+                .canStartQuiz(canStart)
+                .quizPassed(passed)
+                .experienceYears(user.getExperienceMonths() / 12)
+                .disciplineSportIds(parseDisciplineIds(user.getQuizDisciplines()))
+                .attemptsUsed(used)
+                .attemptsRemaining(remaining)
+                .maxAttempts(MAX_QUIZ_ATTEMPTS)
+                .lastScore("ORGANIZADOR".equals(role) ? user.getOrganizerQuizScore() : user.getTrainerQuizScore())
+                .message(message)
+                .build();
+    }
+
+    /**
+     * Mapea la entidad User al DTO de perfil, incluyendo flags e intentos de quiz.
+     */
     private UserProfileResponse convertToResponse(User user) {
         List<String> roles = userRoleRepository.findRoleNamesByUserId(user.getId());
 
@@ -439,9 +637,14 @@ public class UserService {
                 )
                 .certificationFile(user.getCertificationFile())
                 .experienceMonths(user.getExperienceMonths())
+                .experienceYears(user.getExperienceMonths() / 12)
                 .eventsAsTrainer(user.getEventsAsTrainer())
                 .trainerQuizScore(user.getTrainerQuizScore())
                 .trainerQuizPassed(user.isTrainerQuizPassed())
+                .trainerQuizAttempts(user.getTrainerQuizAttempts())
+                .organizerQuizAttempts(user.getOrganizerQuizAttempts())
+                .quizDisciplines(user.getQuizDisciplines())
+                .disciplineSportIds(parseDisciplineIds(user.getQuizDisciplines()))
                 .identityDocument(user.getIdentityDocument())
                 .trainerVerificationStatus(
                         user.getTrainerVerificationStatus() != null ?

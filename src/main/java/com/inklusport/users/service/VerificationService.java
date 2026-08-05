@@ -8,9 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 
+/**
+ * Servicio de verificación de roles; el quiz aprobado basta para aprobar.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -19,30 +20,19 @@ public class VerificationService {
     private final UserRepository userRepository;
 
     /**
-     * Verifica si un usuario cumple los requisitos para ser ORGANIZADOR.
+     * Aprueba ORGANIZADOR cuando organizerQuizPassed es verdadero.
      */
     @Transactional
     public UserProfileResponse verifyOrganizer(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        long days = ChronoUnit.DAYS.between(user.getCreatedAt(), LocalDateTime.now());
-        user.setPlatformDays((int) days);
-
-        boolean meetsRequirements =
-                user.getEventsAttended() >= 5 &&
-                user.isTestEventCreated() &&
-                user.isEmailVerified() &&
-                user.isPhoneVerified() &&
-                days >= 30 &&
-                user.isOrganizerQuizPassed();
-
-        if (meetsRequirements) {
+        if (user.isOrganizerQuizPassed()) {
             user.setOrganizerVerificationStatus(User.VerificationStatus.approved);
             if (!user.getVerifiedRoles().contains("ORGANIZADOR")) {
                 user.setVerifiedRoles(user.getVerifiedRoles() + ",ORGANIZADOR");
             }
-            log.info("Usuario {} verificado como ORGANIZADOR", userId);
+            log.info("Usuario {} verificado como ORGANIZADOR (quiz)", userId);
         } else {
             user.setOrganizerVerificationStatus(User.VerificationStatus.rejected);
             log.info("Usuario {} NO cumple requisitos para ORGANIZADOR", userId);
@@ -53,26 +43,19 @@ public class VerificationService {
     }
 
     /**
-     * Verifica si un usuario cumple los requisitos para ser ENTRENADOR.
+     * Aprueba ENTRENADOR cuando trainerQuizPassed es verdadero.
      */
     @Transactional
     public UserProfileResponse verifyTrainer(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        boolean meetsRequirements =
-                user.getCertificationFile() != null &&
-                user.getExperienceMonths() >= 6 &&
-                user.getEventsAsTrainer() >= 3 &&
-                user.isTrainerQuizPassed() &&
-                user.getIdentityDocument() != null;
-
-        if (meetsRequirements) {
+        if (user.isTrainerQuizPassed()) {
             user.setTrainerVerificationStatus(User.VerificationStatus.approved);
             if (!user.getVerifiedRoles().contains("ENTRENADOR")) {
                 user.setVerifiedRoles(user.getVerifiedRoles() + ",ENTRENADOR");
             }
-            log.info("Usuario {} verificado como ENTRENADOR", userId);
+            log.info("Usuario {} verificado como ENTRENADOR (quiz)", userId);
         } else {
             user.setTrainerVerificationStatus(User.VerificationStatus.rejected);
             log.info("Usuario {} NO cumple requisitos para ENTRENADOR", userId);
@@ -83,7 +66,7 @@ public class VerificationService {
     }
 
     /**
-     * Mapea entidad User a DTO de respuesta.
+     * Mapea la entidad User al DTO de verificación/perfil.
      */
     private UserProfileResponse convertToResponse(User user) {
         return UserProfileResponse.builder()
@@ -111,9 +94,13 @@ public class VerificationService {
                 )
                 .certificationFile(user.getCertificationFile())
                 .experienceMonths(user.getExperienceMonths())
+                .experienceYears(user.getExperienceMonths() / 12)
                 .eventsAsTrainer(user.getEventsAsTrainer())
                 .trainerQuizScore(user.getTrainerQuizScore())
                 .trainerQuizPassed(user.isTrainerQuizPassed())
+                .trainerQuizAttempts(user.getTrainerQuizAttempts())
+                .organizerQuizAttempts(user.getOrganizerQuizAttempts())
+                .quizDisciplines(user.getQuizDisciplines())
                 .identityDocument(user.getIdentityDocument())
                 .trainerVerificationStatus(
                         user.getTrainerVerificationStatus() != null ?

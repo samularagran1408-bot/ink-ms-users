@@ -41,11 +41,11 @@ public class User {
     @Column(name = "is_active")
     private Boolean isActive = true;
 
-    /** RF28: motivo del bloqueo/desactivación. */
+    /** motivo del bloqueo/desactivación. */
     @Column(name = "block_reason", length = 500)
     private String blockReason;
 
-    /** RF28: fin del bloqueo temporal; null + isActive=false + blockedPermanently = permanente. */
+    /** fin del bloqueo temporal; null + isActive=false + blockedPermanently = permanente. */
     @Column(name = "blocked_until")
     private LocalDateTime blockedUntil;
 
@@ -113,6 +113,12 @@ public class User {
     @Column(name = "experience_months")
     private Integer experienceMonths = 0;
 
+    /**
+     * Sport IDs del catálogo, separados por coma (disciplinas del quiz).
+     */
+    @Column(name = "quiz_disciplines", length = 500)
+    private String quizDisciplines;
+
     @Column(name = "events_as_trainer")
     private Integer eventsAsTrainer = 0;
 
@@ -121,6 +127,18 @@ public class User {
 
     @Column(name = "trainer_quiz_passed")
     private Boolean trainerQuizPassed = false;
+
+    /**
+     * Intentos fallidos del quiz de entrenador (máximo configurado en UserService).
+     */
+    @Column(name = "trainer_quiz_attempts")
+    private Integer trainerQuizAttempts = 0;
+
+    /**
+     * Intentos fallidos del quiz de organizador (máximo configurado en UserService).
+     */
+    @Column(name = "organizer_quiz_attempts")
+    private Integer organizerQuizAttempts = 0;
 
     @Column(name = "identity_document")
     private String identityDocument;
@@ -184,6 +202,12 @@ public class User {
         }
         if (eventsAsTrainer == null) {
             eventsAsTrainer = 0;
+        }
+        if (trainerQuizAttempts == null) {
+            trainerQuizAttempts = 0;
+        }
+        if (organizerQuizAttempts == null) {
+            organizerQuizAttempts = 0;
         }
     }
 
@@ -287,6 +311,22 @@ public class User {
 
     public void setEventsAsTrainer(int eventsAsTrainer) {
         this.eventsAsTrainer = eventsAsTrainer;
+    }
+
+    public int getTrainerQuizAttempts() {
+        return trainerQuizAttempts == null ? 0 : trainerQuizAttempts;
+    }
+
+    public void setTrainerQuizAttempts(int trainerQuizAttempts) {
+        this.trainerQuizAttempts = trainerQuizAttempts;
+    }
+
+    public int getOrganizerQuizAttempts() {
+        return organizerQuizAttempts == null ? 0 : organizerQuizAttempts;
+    }
+
+    public void setOrganizerQuizAttempts(int organizerQuizAttempts) {
+        this.organizerQuizAttempts = organizerQuizAttempts;
     }
 
     public enum VerificationStatus {

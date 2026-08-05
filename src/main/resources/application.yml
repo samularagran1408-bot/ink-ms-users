@@ -31,3 +31,10 @@ logging:
 auth:
   service:
     url: http://localhost:3001
+
+accessibility:
+  service:
+    url: ${ACCESSIBILITY_SERVICE_URL:http://localhost:3004}
+
+notifications:
+  admin-emails: ${NOTIFICATION_ADMIN_EMAILS:}

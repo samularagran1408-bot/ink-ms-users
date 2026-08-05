@@ -3,6 +3,7 @@ package com.inklusport.users.controller;
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
 import com.inklusport.users.dto.UserAccessStatusResponse;
 import com.inklusport.users.dto.UserProfileResponse;
+import com.inklusport.users.service.AdminNotificationService;
 import com.inklusport.users.service.RoleService;
 import com.inklusport.users.service.UserService;
 import jakarta.validation.Valid;
@@ -29,6 +30,7 @@ public class InternalUserController {
 
     private final RoleService roleService;
     private final UserService userService;
+    private final AdminNotificationService adminNotificationService;
 
     @GetMapping("/roles-by-email")
     public List<String> getUserRoles(@RequestParam String email) {
@@ -36,7 +38,15 @@ public class InternalUserController {
     }
 
     /**
-     * RF28: estado de acceso efectivo (bloqueos temporales/permanentes).
+     * Emails de usuarios con un rol dado (p. ej. ADMIN) para fan-out de notificaciones.
+     */
+    @GetMapping("/emails-by-role")
+    public List<String> getEmailsByRole(@RequestParam String role) {
+        return adminNotificationService.getEmailsByRole(role);
+    }
+
+    /**
+     * estado de acceso efectivo (bloqueos temporales/permanentes).
      */
     @GetMapping("/access-status")
     public UserAccessStatusResponse getAccessStatus(@RequestParam String email) {

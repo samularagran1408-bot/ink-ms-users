@@ -56,9 +56,14 @@ public class UserProfileResponse {
      */
     private String certificationFile;
     private Integer experienceMonths;
+    private Integer experienceYears;
     private Integer eventsAsTrainer;
     private Double trainerQuizScore;
     private Boolean trainerQuizPassed;
+    private Integer trainerQuizAttempts;
+    private Integer organizerQuizAttempts;
+    private String quizDisciplines;
+    private java.util.List<Integer> disciplineSportIds;
     private String identityDocument;
     private String trainerVerificationStatus;
 

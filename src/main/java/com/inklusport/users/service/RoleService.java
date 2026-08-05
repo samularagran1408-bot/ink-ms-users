@@ -76,7 +76,7 @@ public class RoleService {
     }
 
     /**
-     * RF27: reemplaza todos los roles del usuario por el conjunto indicado.
+     * reemplaza todos los roles del usuario por el conjunto indicado.
      */
     @Transactional
     public List<String> replaceUserRoles(String userEmail, ReplaceRolesRequest request,

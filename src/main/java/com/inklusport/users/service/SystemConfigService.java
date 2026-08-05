@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * RF30: parámetros globales del sistema (políticas, límites, ajustes de operación).
+ * parámetros globales del sistema (políticas, límites, ajustes de operación).
  */
 @Service
 @RequiredArgsConstructor
