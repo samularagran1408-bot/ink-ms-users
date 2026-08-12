@@ -133,6 +133,33 @@ public class AdminUserController {
         }
     }
 
+    @DeleteMapping("/{email}")
+    public ResponseEntity<?> deleteUser(
+            @PathVariable String email,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
+        try {
+            userService.deleteUser(targetEmail, adminEmail, clientIp(httpRequest));
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail);
+        }
+    }
+
+    @PostMapping("/bulk/delete")
+    public ResponseEntity<?> bulkDeleteUsers(
+            @Valid @RequestBody BulkEmailsRequest request,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        try {
+            return ResponseEntity.ok(userService.bulkDeleteUsers(
+                    request.getEmails(), adminEmail, clientIp(httpRequest)));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/bulk/delete");
+        }
+    }
+
 
     @GetMapping("/roles")
     public ResponseEntity<List<RoleResponse>> getAllRoles() {

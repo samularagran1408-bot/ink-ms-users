@@ -1,6 +1,7 @@
 package com.inklusport.users.service;
 
 import com.inklusport.users.dto.BlockUserRequest;
+import com.inklusport.users.dto.BulkActionResponse;
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
 import com.inklusport.users.dto.QuizPrepRequest;
 import com.inklusport.users.dto.QuizPrepResponse;
@@ -348,7 +349,9 @@ public class UserService {
         userRepository.save(user);
     }
 
-    // MÉTODOS DE ACTIVACIÓN / BLOQUEO (RF28)
+    /**
+     * MÉTODOS DE ACTIVACIÓN/DESACTIVACIÓN DE USUARIOS
+     */
 
     @Transactional
     public UserProfileResponse deactivateUser(String email, BlockUserRequest request,
@@ -400,6 +403,56 @@ public class UserService {
         adminAuditService.log(adminEmail, "ACTIVATE_USER", email, saved.getId(), "{}", ipAddress);
         log.info("Usuario activado: {}", email);
         return convertToResponse(saved);
+    }
+
+    /**
+     * Elimina definitivamente el perfil (y roles/actividad en cascada).
+     * No elimina la cuenta en auth-ms; el usuario deja de aparecer en el panel.
+     */
+    @Transactional
+    public void deleteUser(String email, String adminEmail, String ipAddress) {
+        if (adminEmail != null && adminEmail.equalsIgnoreCase(email)) {
+            throw new RuntimeException("No puedes eliminarte a ti mismo");
+        }
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + email));
+        String userId = user.getId();
+        userRepository.delete(user);
+        adminAuditService.log(adminEmail, "DELETE_USER", email, userId, "{}", ipAddress);
+        log.info("Usuario eliminado: {}", email);
+    }
+
+    /** Cada email se elimina en su propia transacción para permitir éxitos parciales. */
+    public BulkActionResponse bulkDeleteUsers(List<String> emails, String adminEmail, String ipAddress) {
+        List<String> succeeded = new ArrayList<>();
+        List<String> failed = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+
+        if (emails == null || emails.isEmpty()) {
+            return BulkActionResponse.builder().succeeded(0).failed(0).build();
+        }
+
+        for (String raw : emails) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String email = raw.trim();
+            try {
+                deleteUser(email, adminEmail, ipAddress);
+                succeeded.add(email);
+            } catch (Exception ex) {
+                failed.add(email);
+                errors.add(email + ": " + ex.getMessage());
+            }
+        }
+
+        return BulkActionResponse.builder()
+                .succeeded(succeeded.size())
+                .failed(failed.size())
+                .succeededEmails(succeeded)
+                .failedEmails(failed)
+                .errors(errors)
+                .build();
     }
 
     /**
