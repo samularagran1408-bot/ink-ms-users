@@ -1,8 +1,10 @@
 package com.inklusport.users.service;
 
+import com.inklusport.users.client.SportsServiceClient;
 import com.inklusport.users.dto.BlockUserRequest;
 import com.inklusport.users.dto.BulkActionResponse;
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
+import com.inklusport.users.dto.FutureRegistrationsCheckResponse;
 import com.inklusport.users.dto.QuizPrepRequest;
 import com.inklusport.users.dto.QuizPrepResponse;
 import com.inklusport.users.dto.UpdateProfileRequest;
@@ -13,6 +15,7 @@ import com.inklusport.users.entity.User;
 import com.inklusport.users.entity.UserRole;
 import com.inklusport.users.entity.UserRoleId;
 import com.inklusport.users.exception.SilentAccessDeniedException;
+import com.inklusport.users.exception.UserHasFutureEventsException;
 import com.inklusport.users.repository.RoleRepository;
 import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.repository.UserRoleRepository;
@@ -37,6 +40,7 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final AdminAuditService adminAuditService;
     private final AdminNotificationService adminNotificationService;
+    private final SportsServiceClient sportsServiceClient;
 
 
     @Transactional
@@ -406,8 +410,7 @@ public class UserService {
     }
 
     /**
-     * Elimina definitivamente el perfil (y roles/actividad en cascada).
-     * No elimina la cuenta en auth-ms; el usuario deja de aparecer en el panel.
+     * Eliminación lógica. Se bloquea si el usuario tiene eventos futuros inscritos.
      */
     @Transactional
     public void deleteUser(String email, String adminEmail, String ipAddress) {
@@ -416,10 +419,40 @@ public class UserService {
         }
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + email));
-        String userId = user.getId();
-        userRepository.delete(user);
-        adminAuditService.log(adminEmail, "DELETE_USER", email, userId, "{}", ipAddress);
-        log.info("Usuario eliminado: {}", email);
+        if (user.isDeleted()) {
+            throw new RuntimeException("El usuario ya está eliminado: " + email);
+        }
+
+        assertNoFutureRegistrations(user);
+
+        user.setDeleted(true);
+        user.setDeletedAt(LocalDateTime.now());
+        user.setActive(false);
+        user.setBlockReason("Eliminación lógica por administrador");
+        userRepository.save(user);
+
+        adminAuditService.log(adminEmail, "SOFT_DELETE_USER", email, user.getId(), "{}", ipAddress);
+        log.info("Usuario eliminado lógicamente: {}", email);
+    }
+
+    private void assertNoFutureRegistrations(User user) {
+        FutureRegistrationsCheckResponse check;
+        try {
+            check = sportsServiceClient.getFutureRegistrations(user.getId());
+        } catch (Exception e) {
+            log.warn("No se pudo consultar eventos futuros de {}: {}", user.getEmail(), e.getMessage());
+            throw new RuntimeException(
+                    "No se pudo verificar si el usuario tiene eventos futuros inscritos. Intenta de nuevo.");
+        }
+        if (check != null && check.isHasFutureRegistrations()) {
+            String names = check.getEventNames() == null || check.getEventNames().isEmpty()
+                    ? ""
+                    : ": " + String.join(", ", check.getEventNames());
+            throw new UserHasFutureEventsException(
+                    "No se puede eliminar: el usuario tiene " + check.getCount()
+                            + " evento(s) futuro(s) inscrito(s)" + names
+                            + ". Cancela esas inscripciones primero.");
+        }
     }
 
     /** Cada email se elimina en su propia transacción para permitir éxitos parciales. */
@@ -466,12 +499,17 @@ public class UserService {
 
         clearExpiredTemporaryBlock(user);
 
-        boolean allowed = user.isActive();
-        String message = allowed
-                ? "Acceso permitido"
-                : (user.isBlockedPermanently()
-                ? "Usuario bloqueado permanentemente"
-                : "Usuario bloqueado temporalmente");
+        boolean allowed = user.isActive() && !user.isDeleted();
+        String message;
+        if (user.isDeleted()) {
+            message = "Usuario eliminado";
+        } else if (allowed) {
+            message = "Acceso permitido";
+        } else {
+            message = user.isBlockedPermanently()
+                    ? "Usuario bloqueado permanentemente"
+                    : "Usuario bloqueado temporalmente";
+        }
 
         if (!allowed && user.getBlockReason() != null && !user.getBlockReason().isBlank()) {
             message = message + ": " + user.getBlockReason();
@@ -521,23 +559,47 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getAllUsers() {
-        return userRepository.findAll().stream()
+        return userRepository.findAllVisible().stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getActiveUsers() {
-        return userRepository.findByIsActiveTrue().stream()
+        return userRepository.findVisibleActive().stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getInactiveUsers() {
-        return userRepository.findByIsActiveFalse().stream()
+        return userRepository.findVisibleInactive().stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserProfileResponse> searchUsers(String name, String disability) {
+        String nameFilter = blankToNull(name);
+        String disabilityFilter = blankToNull(disability);
+        return userRepository.searchVisible(nameFilter, disabilityFilter).stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public long countVisibleUsers() {
+        return userRepository.countVisible();
+    }
+
+    public long countVisibleActiveUsers() {
+        return userRepository.countVisibleActive();
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     @Transactional(readOnly = true)
@@ -673,6 +735,8 @@ public class UserService {
                 .blockReason(user.getBlockReason())
                 .blockedUntil(user.getBlockedUntil())
                 .blockedPermanently(user.isBlockedPermanently())
+                .deleted(user.isDeleted())
+                .deletedAt(user.getDeletedAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .roles(roles)

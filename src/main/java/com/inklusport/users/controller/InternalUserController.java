@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Endpoints internos para consumo entre microservicios.
@@ -43,6 +44,12 @@ public class InternalUserController {
     @GetMapping("/emails-by-role")
     public List<String> getEmailsByRole(@RequestParam String role) {
         return adminNotificationService.getEmailsByRole(role);
+    }
+
+    @GetMapping("/id-by-email")
+    public Map<String, String> getUserIdByEmail(@RequestParam String email) {
+        UserProfileResponse user = userService.getUserProfileByEmail(email);
+        return Map.of("id", user.getId());
     }
 
     /**

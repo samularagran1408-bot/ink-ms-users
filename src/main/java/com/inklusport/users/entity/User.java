@@ -52,6 +52,13 @@ public class User {
     @Column(name = "blocked_permanently")
     private Boolean blockedPermanently = false;
 
+    /** Eliminación lógica: el perfil deja de listarse pero se conserva. */
+    @Column(name = "deleted")
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @Column(name = "profile_picture", columnDefinition = "TEXT")
     private String profilePicture;
 
@@ -173,6 +180,9 @@ public class User {
         if (blockedPermanently == null) {
             blockedPermanently = false;
         }
+        if (deleted == null) {
+            deleted = false;
+        }
         if (emailVerified == null) {
             emailVerified = false;
         }
@@ -231,6 +241,14 @@ public class User {
 
     public void setBlockedPermanently(boolean blockedPermanently) {
         this.blockedPermanently = blockedPermanently;
+    }
+
+    public boolean isDeleted() {
+        return Boolean.TRUE.equals(deleted);
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 
     public boolean isEmailVerified() {

@@ -20,6 +20,31 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     List<User> findByIsActiveFalse();
 
+    @Query("SELECT u FROM User u WHERE (u.deleted IS NULL OR u.deleted = false)")
+    List<User> findAllVisible();
+
+    @Query("SELECT u FROM User u WHERE u.isActive = true AND (u.deleted IS NULL OR u.deleted = false)")
+    List<User> findVisibleActive();
+
+    @Query("SELECT u FROM User u WHERE u.isActive = false AND (u.deleted IS NULL OR u.deleted = false)")
+    List<User> findVisibleInactive();
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.deleted IS NULL OR u.deleted = false")
+    long countVisible();
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isActive = true AND (u.deleted IS NULL OR u.deleted = false)")
+    long countVisibleActive();
+
+    @Query("""
+            SELECT u FROM User u
+            WHERE (u.deleted IS NULL OR u.deleted = false)
+              AND (:name IS NULL OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :name, '%'))
+                   OR LOWER(u.email) LIKE LOWER(CONCAT('%', :name, '%')))
+              AND (:disability IS NULL OR LOWER(u.disability) LIKE LOWER(CONCAT('%', :disability, '%')))
+            ORDER BY u.fullName ASC
+            """)
+    List<User> searchVisible(@Param("name") String name, @Param("disability") String disability);
+
     @Modifying
     @Transactional
     @Query("UPDATE User u SET u.isActive = true WHERE u.email = :email")

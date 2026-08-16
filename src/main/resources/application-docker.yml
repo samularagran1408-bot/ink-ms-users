@@ -31,6 +31,10 @@ accessibility:
 notifications:
   admin-emails: ${NOTIFICATION_ADMIN_EMAILS:}
 
+sports:
+  service:
+    url: ${SPORTS_SERVICE_URL:http://sports-service:3003}
+
 security:
   basic:
     enabled: false

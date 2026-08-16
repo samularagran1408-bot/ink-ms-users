@@ -1,6 +1,7 @@
 package com.inklusport.users.controller;
 
 import com.inklusport.users.dto.*;
+import com.inklusport.users.exception.UserHasFutureEventsException;
 import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.service.AdminAuditService;
 import com.inklusport.users.service.RoleService;
@@ -19,6 +20,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Panel administrativo (RF26–RF30): usuarios, roles, bloqueos, auditoría y configuración.
@@ -54,12 +56,19 @@ public class AdminUserController {
 
     @GetMapping("/count")
     public ResponseEntity<Long> countUsers() {
-        return ResponseEntity.ok(userRepository.count());
+        return ResponseEntity.ok(userService.countVisibleUsers());
     }
 
     @GetMapping("/active/count")
     public ResponseEntity<Long> countActiveUsers() {
-        return ResponseEntity.ok(userRepository.countByIsActiveTrue());
+        return ResponseEntity.ok(userService.countVisibleActiveUsers());
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<UserProfileResponse>> searchUsers(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String disability) {
+        return ResponseEntity.ok(userService.searchUsers(name, disability));
     }
 
     @GetMapping("/by-email")
@@ -141,7 +150,19 @@ public class AdminUserController {
         String targetEmail = decodeEmail(email);
         try {
             userService.deleteUser(targetEmail, adminEmail, clientIp(httpRequest));
-            return ResponseEntity.noContent().build();
+            return ResponseEntity.ok(Map.of(
+                    "status", "SUCCESS",
+                    "message", "Usuario eliminado lógicamente. Ya no aparece en el panel."
+            ));
+        } catch (UserHasFutureEventsException e) {
+            ErrorResponse error = ErrorResponse.builder()
+                    .timestamp(LocalDateTime.now())
+                    .status(HttpStatus.CONFLICT.value())
+                    .error("Conflict")
+                    .message(e.getMessage())
+                    .path("/api/admin/users/" + targetEmail)
+                    .build();
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
         } catch (Exception e) {
             return buildErrorResponse(e, "/api/admin/users/" + targetEmail);
         }

@@ -1,5 +1,6 @@
 package com.inklusport.users.service;
 
+import com.inklusport.users.client.SportsServiceClient;
 import com.inklusport.users.dto.UpdateProfileRequest;
 import com.inklusport.users.dto.UserProfileResponse;
 import com.inklusport.users.entity.User;
@@ -32,6 +33,12 @@ class UserServiceTest {
 
     @Mock
     private AdminAuditService adminAuditService;
+
+    @Mock
+    private AdminNotificationService adminNotificationService;
+
+    @Mock
+    private SportsServiceClient sportsServiceClient;
 
     @InjectMocks
     private UserService userService;

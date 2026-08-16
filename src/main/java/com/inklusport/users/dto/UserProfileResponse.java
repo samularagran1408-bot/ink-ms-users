@@ -30,6 +30,8 @@ public class UserProfileResponse {
     private String blockReason;
     private LocalDateTime blockedUntil;
     private Boolean blockedPermanently;
+    private Boolean deleted;
+    private LocalDateTime deletedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<String> roles;
