@@ -6,6 +6,7 @@ import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.service.AdminAuditService;
 import com.inklusport.users.service.RoleService;
 import com.inklusport.users.service.SystemConfigService;
+import com.inklusport.users.service.UserActivityService;
 import com.inklusport.users.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -37,6 +38,7 @@ public class AdminUserController {
     private final UserRepository userRepository;
     private final AdminAuditService adminAuditService;
     private final SystemConfigService systemConfigService;
+    private final UserActivityService userActivityService;
 
 
     @GetMapping
@@ -94,6 +96,11 @@ public class AdminUserController {
     @GetMapping("/{email}/exists")
     public ResponseEntity<Boolean> userExists(@PathVariable String email) {
         return ResponseEntity.ok(userService.userExists(decodeEmail(email)));
+    }
+
+    @GetMapping("/{email}/activities")
+    public ResponseEntity<AdminUserActivityResponse> getUserActivities(@PathVariable String email) {
+        return ResponseEntity.ok(userActivityService.getAdminActivity(decodeEmail(email)));
     }
 
 

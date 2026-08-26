@@ -9,6 +9,7 @@ import com.inklusport.users.security.JwtTokenProvider;
 import com.inklusport.users.service.AdminAuditService;
 import com.inklusport.users.service.RoleService;
 import com.inklusport.users.service.SystemConfigService;
+import com.inklusport.users.service.UserActivityService;
 import com.inklusport.users.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -55,6 +56,9 @@ class AdminUserControllerSecurityTest {
 
     @MockBean
     private SystemConfigService systemConfigService;
+
+    @MockBean
+    private UserActivityService userActivityService;
 
     @MockBean
     private UserRepository userRepository;

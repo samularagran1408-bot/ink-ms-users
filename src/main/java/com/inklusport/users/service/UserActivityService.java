@@ -1,5 +1,10 @@
 package com.inklusport.users.service;
 
+import com.inklusport.users.client.AuthServiceClient;
+import com.inklusport.users.dto.AdminUserActivityItem;
+import com.inklusport.users.dto.AdminUserActivityResponse;
+import com.inklusport.users.dto.LoginAttemptResponse;
+import com.inklusport.users.dto.RecordActivityRequest;
 import com.inklusport.users.dto.UserActivityResponse;
 import com.inklusport.users.entity.User;
 import com.inklusport.users.entity.UserActivity;
@@ -10,6 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,6 +31,7 @@ public class UserActivityService {
 
     private final UserActivityRepository userActivityRepository;
     private final UserRepository userRepository;
+    private final AuthServiceClient authServiceClient;
 
     /**
      * Registra una actividad del usuario con acción, detalle e IP.
@@ -97,6 +106,76 @@ public class UserActivityService {
                 .details(activity.getDetails())
                 .ipAddress(activity.getIpAddress())
                 .createdAt(activity.getCreatedAt())
+                .build();
+    }
+
+    @Transactional
+    public void recordFromInternal(RecordActivityRequest request) {
+        if (request == null || request.getEmail() == null || request.getEmail().isBlank()) {
+            return;
+        }
+        String action = request.getAction() == null || request.getAction().isBlank()
+                ? "LOGIN"
+                : request.getAction().trim().toUpperCase();
+        logActivityQuietly(request.getEmail(), action, request.getDetails(), request.getIpAddress());
+        if ("LOGIN".equals(action)) {
+            userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+                user.setLastLoginAt(LocalDateTime.now());
+                userRepository.save(user);
+            });
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public AdminUserActivityResponse getAdminActivity(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        List<AdminUserActivityItem> items = new ArrayList<>();
+        for (UserActivityResponse activity : getUserActivities(email)) {
+            items.add(AdminUserActivityItem.builder()
+                    .action(activity.getAction())
+                    .details(activity.getDetails())
+                    .ipAddress(activity.getIpAddress())
+                    .createdAt(activity.getCreatedAt())
+                    .source("PROFILE")
+                    .build());
+        }
+
+        try {
+            List<LoginAttemptResponse> logins = authServiceClient.getLoginHistory(email);
+            if (logins != null) {
+                for (LoginAttemptResponse login : logins) {
+                    boolean ok = Boolean.TRUE.equals(login.getSuccessful());
+                    items.add(AdminUserActivityItem.builder()
+                            .action(ok ? "LOGIN" : "LOGIN_FAILED")
+                            .details(ok ? "{\"message\":\"Ingreso al sistema\"}" : "{\"message\":\"Intento de ingreso fallido\"}")
+                            .ipAddress(login.getIpAddress())
+                            .createdAt(login.getAttemptTime())
+                            .source("LOGIN")
+                            .build());
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("No se pudo obtener historial de login para {}: {}", email, ex.getMessage());
+        }
+
+        items.sort(Comparator.comparing(AdminUserActivityItem::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        LocalDateTime lastLogin = user.getLastLoginAt();
+        try {
+            var fromAuth = authServiceClient.getLastLogin(email);
+            if (fromAuth != null && fromAuth.getLastLogin() != null) {
+                lastLogin = fromAuth.getLastLogin();
+            }
+        } catch (Exception ex) {
+            log.warn("No se pudo consultar último login de {}: {}", email, ex.getMessage());
+        }
+
+        return AdminUserActivityResponse.builder()
+                .lastLoginAt(lastLogin)
+                .items(items.stream().limit(50).toList())
                 .build();
     }
 }

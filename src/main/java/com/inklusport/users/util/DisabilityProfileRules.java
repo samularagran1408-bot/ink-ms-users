@@ -4,28 +4,28 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Reglas compartidas de perfil inclusivo: discapacidades graves requieren acompañante.
+ * Reglas de perfil inclusivo según tipo de discapacidad:
+ * <ul>
+ *   <li>VISUAL, INTELECTUAL, COGNITIVA, MULTIPLE: acompañante obligatorio.</li>
+ *   <li>MOTRIZ: acompañante opcional.</li>
+ *   <li>AUDITIVA y sin discapacidad: no se exige acompañante.</li>
+ * </ul>
  */
 public final class DisabilityProfileRules {
 
-    private static final Set<String> REQUIRES_COMPANION = Set.of("MOTRIZ", "AUDITIVA");
+    private static final Set<String> REQUIRES_COMPANION = Set.of(
+            "VISUAL", "VISION",
+            "INTELECTUAL", "INTELLECTUAL",
+            "COGNITIVA", "COGNITIVE",
+            "MULTIPLE", "MULTIPLE_DISABILITY"
+    );
 
     private DisabilityProfileRules() {
     }
 
     public static boolean requiresCompanion(String disability) {
-        if (disability == null || disability.isBlank()) {
-            return false;
-        }
-        String normalized = disability.trim()
-                .toUpperCase(Locale.ROOT)
-                .replace('-', '_')
-                .replace(' ', '_');
-        if ("FISICA".equals(normalized) || "FISICA_MOTORA".equals(normalized)
-                || "MOTORA".equals(normalized) || "PHYSICAL".equals(normalized)) {
-            return true;
-        }
-        return REQUIRES_COMPANION.contains(normalized);
+        String normalized = normalize(disability);
+        return normalized != null && REQUIRES_COMPANION.contains(normalized);
     }
 
     public static void assertCompanionPresent(String disability,
@@ -40,6 +40,16 @@ public final class DisabilityProfileRules {
                             + " el acompañante es obligatorio. "
                             + "Indique al menos nombre completo y teléfono de contacto.");
         }
+    }
+
+    private static String normalize(String disability) {
+        if (disability == null || disability.isBlank()) {
+            return null;
+        }
+        return disability.trim()
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
     }
 
     private static boolean isBlank(String value) {

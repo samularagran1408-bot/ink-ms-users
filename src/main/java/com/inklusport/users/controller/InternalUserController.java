@@ -1,10 +1,12 @@
 package com.inklusport.users.controller;
 
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
+import com.inklusport.users.dto.RecordActivityRequest;
 import com.inklusport.users.dto.UserAccessStatusResponse;
 import com.inklusport.users.dto.UserProfileResponse;
 import com.inklusport.users.service.AdminNotificationService;
 import com.inklusport.users.service.RoleService;
+import com.inklusport.users.service.UserActivityService;
 import com.inklusport.users.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ public class InternalUserController {
     private final RoleService roleService;
     private final UserService userService;
     private final AdminNotificationService adminNotificationService;
+    private final UserActivityService userActivityService;
 
     @GetMapping("/roles-by-email")
     public List<String> getUserRoles(@RequestParam String email) {
@@ -65,6 +68,12 @@ public class InternalUserController {
     public UserProfileResponse createProfileFromRegister(
             @Valid @RequestBody CreateProfileFromRegisterRequest request) {
         return userService.createProfileFromRegister(request);
+    }
+
+    @PostMapping("/activity")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordActivity(@RequestBody RecordActivityRequest request) {
+        userActivityService.recordFromInternal(request);
     }
 
     @GetMapping("/{id}")

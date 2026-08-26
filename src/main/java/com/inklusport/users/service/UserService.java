@@ -1,10 +1,12 @@
 package com.inklusport.users.service;
 
+import com.inklusport.users.client.AuthServiceClient;
 import com.inklusport.users.client.SportsServiceClient;
 import com.inklusport.users.dto.BlockUserRequest;
 import com.inklusport.users.dto.BulkActionResponse;
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
 import com.inklusport.users.dto.FutureRegistrationsCheckResponse;
+import com.inklusport.users.dto.LastLoginResponse;
 import com.inklusport.users.dto.QuizPrepRequest;
 import com.inklusport.users.dto.QuizPrepResponse;
 import com.inklusport.users.dto.UpdateProfileRequest;
@@ -27,7 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,6 +47,7 @@ public class UserService {
     private final AdminAuditService adminAuditService;
     private final AdminNotificationService adminNotificationService;
     private final SportsServiceClient sportsServiceClient;
+    private final AuthServiceClient authServiceClient;
 
 
     @Transactional
@@ -131,14 +138,14 @@ public class UserService {
     public UserProfileResponse getUserProfileByEmail(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
-        return convertToResponse(user);
+        return withLastLogin(convertToResponse(user));
     }
 
     @Transactional(readOnly = true)
     public UserProfileResponse getUserProfileById(String id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
-        return convertToResponse(user);
+        return withLastLogin(convertToResponse(user));
     }
 
     @Transactional
@@ -559,32 +566,32 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getAllUsers() {
-        return userRepository.findAllVisible().stream()
+        return withLastLogins(userRepository.findAllVisible().stream()
                 .map(this::convertToResponse)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
     }
 
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getActiveUsers() {
-        return userRepository.findVisibleActive().stream()
+        return withLastLogins(userRepository.findVisibleActive().stream()
                 .map(this::convertToResponse)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
     }
 
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getInactiveUsers() {
-        return userRepository.findVisibleInactive().stream()
+        return withLastLogins(userRepository.findVisibleInactive().stream()
                 .map(this::convertToResponse)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
     }
 
     @Transactional(readOnly = true)
     public List<UserProfileResponse> searchUsers(String name, String disability) {
         String nameFilter = blankToNull(name);
         String disabilityFilter = blankToNull(disability);
-        return userRepository.searchVisible(nameFilter, disabilityFilter).stream()
+        return withLastLogins(userRepository.searchVisible(nameFilter, disabilityFilter).stream()
                 .map(this::convertToResponse)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
     }
 
     public long countVisibleUsers() {
@@ -739,6 +746,7 @@ public class UserService {
                 .deletedAt(user.getDeletedAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .lastLoginAt(user.getLastLoginAt())
                 .roles(roles)
                 .emailVerified(user.isEmailVerified())
                 .phoneVerified(user.isPhoneVerified())
@@ -769,5 +777,47 @@ public class UserService {
                 )
                 .verifiedRoles(user.getVerifiedRoles())
                 .build();
+    }
+
+    private UserProfileResponse withLastLogin(UserProfileResponse user) {
+        withLastLogins(List.of(user));
+        return user;
+    }
+
+    private List<UserProfileResponse> withLastLogins(List<UserProfileResponse> users) {
+        if (users == null || users.isEmpty()) {
+            return users;
+        }
+        try {
+            List<String> emails = users.stream()
+                    .map(UserProfileResponse::getEmail)
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (emails.isEmpty()) {
+                return users;
+            }
+            List<LastLoginResponse> remote = authServiceClient.getLastLogins(emails);
+            if (remote == null || remote.isEmpty()) {
+                return users;
+            }
+            Map<String, LocalDateTime> byEmail = new HashMap<>();
+            for (LastLoginResponse item : remote) {
+                if (item.getEmail() != null && item.getLastLogin() != null) {
+                    byEmail.put(item.getEmail().toLowerCase(Locale.ROOT), item.getLastLogin());
+                }
+            }
+            for (UserProfileResponse user : users) {
+                if (user.getEmail() == null) {
+                    continue;
+                }
+                LocalDateTime fromAuth = byEmail.get(user.getEmail().toLowerCase(Locale.ROOT));
+                if (fromAuth != null) {
+                    user.setLastLoginAt(fromAuth);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("No se pudieron consultar últimos accesos en auth-ms: {}", ex.getMessage());
+        }
+        return users;
     }
 }
