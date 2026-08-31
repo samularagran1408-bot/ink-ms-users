@@ -44,6 +44,9 @@ class UserServiceTest {
     @Mock
     private AuthServiceClient authServiceClient;
 
+    @Mock
+    private CloudinaryStorageService cloudinaryStorage;
+
     @InjectMocks
     private UserService userService;
 

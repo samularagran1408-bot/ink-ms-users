@@ -26,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ public class UserService {
     private final AdminNotificationService adminNotificationService;
     private final SportsServiceClient sportsServiceClient;
     private final AuthServiceClient authServiceClient;
+    private final CloudinaryStorageService cloudinaryStorage;
 
 
     @Transactional
@@ -155,7 +157,7 @@ public class UserService {
 
         if (request.getFullName() != null) user.setFullName(request.getFullName());
         if (request.getPhone() != null) user.setPhone(trimToNull(request.getPhone()));
-        if (request.getProfilePicture() != null) user.setProfilePicture(trimToNull(request.getProfilePicture()));
+        if (request.getProfilePicture() != null) applyProfilePicture(user, request.getProfilePicture());
         if (request.getBio() != null) user.setBio(request.getBio());
         if (request.getDisability() != null) user.setDisability(trimToNull(request.getDisability()));
         if (request.getCompanionFullName() != null) user.setCompanionFullName(trimToNull(request.getCompanionFullName()));
@@ -176,6 +178,52 @@ public class UserService {
         return convertToResponse(updatedUser);
     }
 
+    @Transactional
+    public UserProfileResponse uploadProfilePhoto(String email, MultipartFile file) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        String url = cloudinaryStorage.uploadImage(user.getId(), file);
+        user.setProfilePicture(url);
+        User saved = userRepository.save(user);
+        log.info("Foto de perfil subida a Cloudinary: {}", email);
+        return convertToResponse(saved);
+    }
+
+    @Transactional
+    public UserProfileResponse deleteProfilePhoto(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        applyProfilePicture(user, "");
+        User saved = userRepository.save(user);
+        log.info("Foto de perfil eliminada: {}", email);
+        return convertToResponse(saved);
+    }
+
+    private void applyProfilePicture(User user, String incoming) {
+        if (incoming == null) {
+            return;
+        }
+        String value = incoming.trim();
+        if (value.isEmpty()) {
+            cloudinaryStorage.deleteStored(user.getId(), user.getProfilePicture());
+            user.setProfilePicture(null);
+            return;
+        }
+        if (value.regionMatches(true, 0, "data:image/", 0, 11)) {
+            String url = cloudinaryStorage.uploadDataUrl(user.getId(), value);
+            user.setProfilePicture(url);
+            return;
+        }
+        if (value.startsWith("https://") || value.startsWith("http://")) {
+            String previous = user.getProfilePicture();
+            if (previous != null && !previous.equals(value)) {
+                cloudinaryStorage.deleteStored(user.getId(), previous);
+            }
+            user.setProfilePicture(value);
+            return;
+        }
+        throw new RuntimeException("Formato de foto de perfil no válido.");
+    }
 
     /**
      * Años mínimos de experiencia declarados antes del quiz.
@@ -436,6 +484,8 @@ public class UserService {
         user.setDeletedAt(LocalDateTime.now());
         user.setActive(false);
         user.setBlockReason("Eliminación lógica por administrador");
+        cloudinaryStorage.deleteStored(user.getId(), user.getProfilePicture());
+        user.setProfilePicture(null);
         userRepository.save(user);
 
         adminAuditService.log(adminEmail, "SOFT_DELETE_USER", email, user.getId(), "{}", ipAddress);

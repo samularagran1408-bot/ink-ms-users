@@ -1,6 +1,7 @@
 package com.inklusport.users.controller;
 
 import com.inklusport.users.dto.*;
+import com.inklusport.users.entity.User;
 import com.inklusport.users.exception.UserHasFutureEventsException;
 import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.service.AdminAuditService;
@@ -12,10 +13,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -90,6 +93,41 @@ public class AdminUserController {
                     targetEmail, request, adminEmail, clientIp(httpRequest)));
         } catch (Exception e) {
             return buildErrorResponse(e, "/api/admin/users/" + targetEmail);
+        }
+    }
+
+    @PostMapping(value = "/{email}/foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadUserPhoto(
+            @PathVariable String email,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
+        try {
+            UserProfileResponse updated = userService.uploadProfilePhoto(targetEmail, file);
+            User user = userRepository.findByEmail(targetEmail).orElseThrow();
+            adminAuditService.log(adminEmail, "UPDATE_USER_PHOTO", targetEmail, user.getId(),
+                    "{\"fields\":\"photo\"}", clientIp(httpRequest));
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/foto");
+        }
+    }
+
+    @DeleteMapping("/{email}/foto")
+    public ResponseEntity<?> deleteUserPhoto(
+            @PathVariable String email,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        String targetEmail = decodeEmail(email);
+        try {
+            UserProfileResponse updated = userService.deleteProfilePhoto(targetEmail);
+            User user = userRepository.findByEmail(targetEmail).orElseThrow();
+            adminAuditService.log(adminEmail, "DELETE_USER_PHOTO", targetEmail, user.getId(),
+                    "{\"fields\":\"photo\"}", clientIp(httpRequest));
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/foto");
         }
     }
 

@@ -10,9 +10,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -94,7 +96,40 @@ public class UserController {
             return buildErrorResponse(e, "/api/users/perfil");
         }
     }
- 
+
+    @PostMapping(value = "/perfil/foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadMyPhoto(@AuthenticationPrincipal String email,
+                                           @RequestParam("file") MultipartFile file,
+                                           HttpServletRequest httpRequest) {
+        try {
+            UserProfileResponse response = userService.uploadProfilePhoto(email, file);
+            userActivityService.logActivityQuietly(
+                    email,
+                    "UPDATE_PROFILE_PHOTO",
+                    "{\"message\":\"Foto de perfil actualizada\"}",
+                    httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/users/perfil/foto");
+        }
+    }
+
+    @DeleteMapping("/perfil/foto")
+    public ResponseEntity<?> deleteMyPhoto(@AuthenticationPrincipal String email,
+                                           HttpServletRequest httpRequest) {
+        try {
+            UserProfileResponse response = userService.deleteProfilePhoto(email);
+            userActivityService.logActivityQuietly(
+                    email,
+                    "DELETE_PROFILE_PHOTO",
+                    "{\"message\":\"Foto de perfil eliminada\"}",
+                    httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/users/perfil/foto");
+        }
+    }
+
     /**
      * Obtiene el historial de actividades del usuario autenticado.
      */

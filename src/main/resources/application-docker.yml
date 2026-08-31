@@ -17,6 +17,11 @@ spring:
         format-sql: true
         dialect: org.hibernate.dialect.MySQLDialect
 
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+
 server:
   port: 3002
 
@@ -34,6 +39,13 @@ notifications:
 sports:
   service:
     url: ${SPORTS_SERVICE_URL:http://sports-service:3003}
+
+cloudinary:
+  url: ${CLOUDINARY_URL:}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+  folder: inklusport/profiles
 
 security:
   basic:
