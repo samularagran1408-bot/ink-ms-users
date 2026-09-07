@@ -13,6 +13,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Almacenamiento de fotos de perfil en Cloudinary.
+ */
 @Service
 @Slf4j
 public class CloudinaryStorageService {
@@ -25,6 +28,9 @@ public class CloudinaryStorageService {
     private final Cloudinary cloudinary;
     private final String folder;
 
+    /**
+     * Inicializa el cliente y normaliza la carpeta de destino.
+     */
     public CloudinaryStorageService(
             Cloudinary cloudinary,
             @Value("${cloudinary.folder:inklusport/profiles}") String folder) {
@@ -32,6 +38,9 @@ public class CloudinaryStorageService {
         this.folder = folder.endsWith("/") ? folder.substring(0, folder.length() - 1) : folder;
     }
 
+    /**
+     * Indica si Cloudinary tiene credenciales válidas y no está deshabilitado.
+     */
     public boolean isConfigured() {
         Object cloudName = cloudinary.config.cloudName;
         Object apiKey = cloudinary.config.apiKey;
@@ -41,10 +50,16 @@ public class CloudinaryStorageService {
                 && !String.valueOf(apiKey).isBlank();
     }
 
+    /**
+     * Construye el publicId del asset de perfil para el usuario.
+     */
     public String publicIdFor(String userId) {
         return folder + "/" + userId;
     }
 
+    /**
+     * Valida y sube una imagen de perfil; devuelve la URL segura.
+     */
     public String uploadImage(String userId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("Selecciona una imagen de perfil.");
@@ -66,6 +81,9 @@ public class CloudinaryStorageService {
         }
     }
 
+    /**
+     * Decodifica un data URL de imagen y lo sube a Cloudinary.
+     */
     public String uploadDataUrl(String userId, String dataUrl) {
         if (dataUrl == null || !dataUrl.regionMatches(true, 0, "data:image/", 0, 11)) {
             throw new RuntimeException("Formato de foto de perfil no válido.");
@@ -85,6 +103,9 @@ public class CloudinaryStorageService {
         }
     }
 
+    /**
+     * Elimina el asset del usuario y, si aplica, el publicId extraído de la URL.
+     */
     public void deleteStored(String userId, String storedValue) {
         if (!isConfigured()) {
             return;
@@ -96,6 +117,9 @@ public class CloudinaryStorageService {
         }
     }
 
+    /**
+     * Extrae el publicId de una URL de Cloudinary; vacío si no aplica.
+     */
     static String extractPublicId(String stored) {
         if (stored == null || stored.isBlank() || stored.startsWith("data:")) {
             return "";
@@ -134,6 +158,9 @@ public class CloudinaryStorageService {
         return joined;
     }
 
+    /**
+     * Sube los bytes de la imagen y devuelve la URL segura de Cloudinary.
+     */
     private String uploadBytes(String userId, byte[] bytes) {
         ensureConfigured();
         try {
@@ -159,12 +186,18 @@ public class CloudinaryStorageService {
         }
     }
 
+    /**
+     * Lanza error si Cloudinary no está configurado.
+     */
     private void ensureConfigured() {
         if (!isConfigured()) {
             throw new RuntimeException("Cloudinary no está configurado. Define CLOUDINARY_URL o las claves API.");
         }
     }
 
+    /**
+     * Intenta borrar un asset sin interrumpir el flujo si falla.
+     */
     private void destroyQuietly(String publicId) {
         try {
             cloudinary.uploader().destroy(publicId, ObjectUtils.asMap(
@@ -176,6 +209,9 @@ public class CloudinaryStorageService {
         }
     }
 
+    /**
+     * Indica si el segmento de URL es una versión (v + dígitos).
+     */
     private static boolean isVersionSegment(String part) {
         if (part == null || part.length() < 2 || part.charAt(0) != 'v') {
             return false;

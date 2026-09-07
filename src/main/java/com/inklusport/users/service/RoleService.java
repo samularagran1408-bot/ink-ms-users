@@ -33,6 +33,9 @@ public class RoleService {
     private final UserRoleRepository userRoleRepository;
     private final AdminAuditService adminAuditService;
 
+    /**
+     * Lista todos los roles disponibles del catálogo.
+     */
     @Transactional(readOnly = true)
     public List<RoleResponse> getAllRoles() {
         return roleRepository.findAll().stream()
@@ -40,6 +43,9 @@ public class RoleService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Asigna un rol adicional al usuario y registra la acción en auditoría.
+     */
     @Transactional
     public AssignRoleResponse assignRoleToUser(String userEmail, AssignRoleRequest request,
                                                String assignedByAdminEmail, String ipAddress) {
@@ -118,6 +124,9 @@ public class RoleService {
         return assigned;
     }
 
+    /**
+     * Quita un rol asignado al usuario y deja constancia en auditoría.
+     */
     @Transactional
     public void removeRoleFromUser(String userEmail, Long roleId, String adminEmail, String ipAddress) {
         User user = userRepository.findByEmail(userEmail)
@@ -138,6 +147,9 @@ public class RoleService {
         log.info("Rol {} removido de usuario {}", roleId, userEmail);
     }
 
+    /**
+     * Devuelve los nombres de rol del usuario; lista vacía si no existe.
+     */
     @Transactional(readOnly = true)
     public List<String> getUserRoles(String email) {
         return userRepository.findByEmail(email)
@@ -145,6 +157,9 @@ public class RoleService {
                 .orElse(List.of());
     }
 
+    /**
+     * Resuelve el rol por id o nombre; exige al menos uno de los dos.
+     */
     private Role resolveRole(AssignRoleRequest request) {
         if (request.getRoleId() != null) {
             return roleRepository.findById(request.getRoleId())
@@ -160,12 +175,18 @@ public class RoleService {
         throw new RuntimeException("Debe indicar roleId o roleName");
     }
 
+    /**
+     * Serializa una lista de textos a un arreglo JSON simple.
+     */
     private static String toJsonArray(List<String> values) {
         return values.stream()
                 .map(v -> "\"" + v + "\"")
                 .collect(Collectors.joining(",", "[", "]"));
     }
 
+    /**
+     * Convierte la entidad Role a su DTO de respuesta.
+     */
     private RoleResponse convertToResponse(Role role) {
         return RoleResponse.builder()
                 .id(role.getId())

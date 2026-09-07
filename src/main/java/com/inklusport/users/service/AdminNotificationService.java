@@ -32,6 +32,9 @@ public class AdminNotificationService {
     @Value("${notifications.admin-emails:}")
     private String adminEmailsConfig;
 
+    /**
+     * Avisa a los administradores de un nuevo registro de usuario.
+     */
     public void notifyAdminsNewUserRegistered(String email, String fullName) {
         String displayName = (fullName != null && !fullName.isBlank()) ? fullName.trim() : email;
         notifyAdmins(
@@ -42,6 +45,9 @@ public class AdminNotificationService {
         );
     }
 
+    /**
+     * Envía una notificación a todos los correos de administrador resueltos.
+     */
     public void notifyAdmins(String type, String title, String body, String eventId) {
         Set<String> recipients = resolveAdminEmails();
         if (recipients.isEmpty()) {
@@ -65,6 +71,9 @@ public class AdminNotificationService {
         }
     }
 
+    /**
+     * Obtiene los correos de usuarios que tienen el rol indicado.
+     */
     public List<String> getEmailsByRole(String roleName) {
         if (roleName == null || roleName.isBlank()) {
             return List.of();
@@ -80,6 +89,9 @@ public class AdminNotificationService {
                 .orElse(List.of());
     }
 
+    /**
+     * Une correos admin de configuración y del rol ADMIN, sin duplicados.
+     */
     private Set<String> resolveAdminEmails() {
         Set<String> emails = new LinkedHashSet<>();
 

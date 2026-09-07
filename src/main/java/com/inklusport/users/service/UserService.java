@@ -37,6 +37,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Gestión de perfiles de usuario, verificación, bloqueos y listados.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -52,6 +55,9 @@ public class UserService {
     private final CloudinaryStorageService cloudinaryStorage;
 
 
+    /**
+     * Crea un perfil básico activo a partir de correo y nombre.
+     */
     @Transactional
     public UserProfileResponse createUserProfile(String email, String fullName) {
         if (userRepository.existsByEmail(email)) {
@@ -111,6 +117,9 @@ public class UserService {
         return convertToResponse(savedUser);
     }
 
+    /**
+     * Asigna el rol USUARIO por defecto si el usuario aún no lo tiene.
+     */
     private void assignDefaultUsuarioRole(User user) {
         Role role = roleRepository.findByName("USUARIO")
                 .orElseThrow(() -> new RuntimeException("Rol USUARIO no encontrado en el catálogo"));
@@ -128,6 +137,9 @@ public class UserService {
         userRoleRepository.save(userRole);
     }
 
+    /**
+     * Recorta espacios y convierte cadenas vacías a null.
+     */
     private String trimToNull(String value) {
         if (value == null) {
             return null;
@@ -136,6 +148,9 @@ public class UserService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /**
+     * Obtiene el perfil por correo, enriquecido con el último login.
+     */
     @Transactional(readOnly = true)
     public UserProfileResponse getUserProfileByEmail(String email) {
         User user = userRepository.findByEmail(email)
@@ -143,6 +158,9 @@ public class UserService {
         return withLastLogin(convertToResponse(user));
     }
 
+    /**
+     * Obtiene el perfil por identificador, enriquecido con el último login.
+     */
     @Transactional(readOnly = true)
     public UserProfileResponse getUserProfileById(String id) {
         User user = userRepository.findById(id)
@@ -150,6 +168,9 @@ public class UserService {
         return withLastLogin(convertToResponse(user));
     }
 
+    /**
+     * Actualiza los campos enviados del perfil y valida datos de acompañante.
+     */
     @Transactional
     public UserProfileResponse updateUserProfile(String email, UpdateProfileRequest request) {
         User user = userRepository.findByEmail(email)
@@ -178,6 +199,9 @@ public class UserService {
         return convertToResponse(updatedUser);
     }
 
+    /**
+     * Sube la foto de perfil a Cloudinary y la guarda en el usuario.
+     */
     @Transactional
     public UserProfileResponse uploadProfilePhoto(String email, MultipartFile file) {
         User user = userRepository.findByEmail(email)
@@ -189,6 +213,9 @@ public class UserService {
         return convertToResponse(saved);
     }
 
+    /**
+     * Elimina la foto de perfil almacenada y limpia el campo.
+     */
     @Transactional
     public UserProfileResponse deleteProfilePhoto(String email) {
         User user = userRepository.findByEmail(email)
@@ -199,6 +226,9 @@ public class UserService {
         return convertToResponse(saved);
     }
 
+    /**
+     * Aplica, reemplaza o borra la foto según data URL, URL o valor vacío.
+     */
     private void applyProfilePicture(User user, String incoming) {
         if (incoming == null) {
             return;
@@ -412,6 +442,9 @@ public class UserService {
      * MÉTODOS DE ACTIVACIÓN/DESACTIVACIÓN DE USUARIOS
      */
 
+    /**
+     * Bloquea al usuario de forma permanente o temporal y audita la acción.
+     */
     @Transactional
     public UserProfileResponse deactivateUser(String email, BlockUserRequest request,
                                               String adminEmail, String ipAddress) {
@@ -448,6 +481,9 @@ public class UserService {
         return convertToResponse(saved);
     }
 
+    /**
+     * Reactiva al usuario y limpia bloqueos previos.
+     */
     @Transactional
     public UserProfileResponse activateUser(String email, String adminEmail, String ipAddress) {
         User user = userRepository.findByEmail(email)
@@ -492,6 +528,9 @@ public class UserService {
         log.info("Usuario eliminado lógicamente: {}", email);
     }
 
+    /**
+     * Impide eliminar al usuario si tiene inscripciones a eventos futuros.
+     */
     private void assertNoFutureRegistrations(User user) {
         FutureRegistrationsCheckResponse check;
         try {
@@ -583,6 +622,9 @@ public class UserService {
                 .build();
     }
 
+    /**
+     * Reactiva automáticamente un bloqueo temporal ya vencido.
+     */
     private void clearExpiredTemporaryBlock(User user) {
         if (user.isActive()) {
             return;
@@ -602,6 +644,9 @@ public class UserService {
         }
     }
 
+    /**
+     * Actualiza el perfil como administrador y deja constancia en auditoría.
+     */
     @Transactional
     public UserProfileResponse adminUpdateUser(String email, UpdateProfileRequest request,
                                                String adminEmail, String ipAddress) {
@@ -614,6 +659,9 @@ public class UserService {
 
     // MÉTODOS DE LISTADO
 
+    /**
+     * Lista todos los usuarios visibles con su último acceso.
+     */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getAllUsers() {
         return withLastLogins(userRepository.findAllVisible().stream()
@@ -621,6 +669,9 @@ public class UserService {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * Lista los usuarios visibles activos.
+     */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getActiveUsers() {
         return withLastLogins(userRepository.findVisibleActive().stream()
@@ -628,6 +679,9 @@ public class UserService {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * Lista los usuarios visibles inactivos.
+     */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getInactiveUsers() {
         return withLastLogins(userRepository.findVisibleInactive().stream()
@@ -635,6 +689,9 @@ public class UserService {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * Busca usuarios visibles por nombre y/o discapacidad.
+     */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> searchUsers(String name, String disability) {
         String nameFilter = blankToNull(name);
@@ -644,14 +701,23 @@ public class UserService {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * Cuenta los usuarios visibles (no eliminados lógicamente).
+     */
     public long countVisibleUsers() {
         return userRepository.countVisible();
     }
 
+    /**
+     * Cuenta los usuarios visibles que están activos.
+     */
     public long countVisibleActiveUsers() {
         return userRepository.countVisibleActive();
     }
 
+    /**
+     * Convierte texto en blanco a null; si no, lo recorta.
+     */
     private static String blankToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -659,11 +725,17 @@ public class UserService {
         return value.trim();
     }
 
+    /**
+     * Indica si existe un usuario con el correo dado.
+     */
     @Transactional(readOnly = true)
     public boolean userExists(String email) {
         return userRepository.existsByEmail(email);
     }
 
+    /**
+     * Escapa barras y comillas para incrustar texto en JSON.
+     */
     private static String escapeJson(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
@@ -829,11 +901,17 @@ public class UserService {
                 .build();
     }
 
+    /**
+     * Completa el último login de un único perfil consultando auth.
+     */
     private UserProfileResponse withLastLogin(UserProfileResponse user) {
         withLastLogins(List.of(user));
         return user;
     }
 
+    /**
+     * Enriquece una lista de perfiles con los últimos accesos de auth-ms.
+     */
     private List<UserProfileResponse> withLastLogins(List<UserProfileResponse> users) {
         if (users == null || users.isEmpty()) {
             return users;

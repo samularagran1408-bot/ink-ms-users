@@ -73,6 +73,9 @@ public class UserActivityService {
         }
     }
 
+    /**
+     * Normaliza el detalle a JSON válido; envuelve texto plano si hace falta.
+     */
     private String toValidJsonDetails(String details) {
         if (details == null || details.isBlank()) {
             return "{}";
@@ -88,6 +91,9 @@ public class UserActivityService {
         return "{\"message\":\"" + escaped + "\"}";
     }
 
+    /**
+     * Lista las actividades de perfil del usuario, de la más reciente a la más antigua.
+     */
     @Transactional(readOnly = true)
     public List<UserActivityResponse> getUserActivities(String email) {
         User user = userRepository.findByEmail(email)
@@ -99,6 +105,9 @@ public class UserActivityService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Convierte una actividad persistida a su DTO de respuesta.
+     */
     private UserActivityResponse convertToResponse(UserActivity activity) {
         return UserActivityResponse.builder()
                 .id(activity.getId())
@@ -109,6 +118,9 @@ public class UserActivityService {
                 .build();
     }
 
+    /**
+     * Registra actividad interna (p. ej. login) y actualiza lastLoginAt si aplica.
+     */
     @Transactional
     public void recordFromInternal(RecordActivityRequest request) {
         if (request == null || request.getEmail() == null || request.getEmail().isBlank()) {
@@ -126,6 +138,9 @@ public class UserActivityService {
         }
     }
 
+    /**
+     * Combina actividad de perfil e historial de login para la vista admin.
+     */
     @Transactional(readOnly = true)
     public AdminUserActivityResponse getAdminActivity(String email) {
         User user = userRepository.findByEmail(email)

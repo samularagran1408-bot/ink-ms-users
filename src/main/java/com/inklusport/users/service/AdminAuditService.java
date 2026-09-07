@@ -21,6 +21,9 @@ public class AdminAuditService {
 
     private final AdminAuditLogRepository adminAuditLogRepository;
 
+    /**
+     * Registra una acción administrativa en el historial de auditoría.
+     */
     @Transactional
     public void log(String adminEmail, String action, String targetEmail, String targetUserId,
                     String details, String ipAddress) {
@@ -35,6 +38,9 @@ public class AdminAuditService {
         log.info("Auditoría admin: {} → {} ({})", entry.getAdminEmail(), action, targetEmail);
     }
 
+    /**
+     * Devuelve todos los registros de auditoría, del más reciente al más antiguo.
+     */
     @Transactional(readOnly = true)
     public List<AdminAuditLogResponse> getAll() {
         return adminAuditLogRepository.findAllByOrderByCreatedAtDesc().stream()
@@ -42,6 +48,9 @@ public class AdminAuditService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Lista las acciones administrativas que afectan al correo indicado.
+     */
     @Transactional(readOnly = true)
     public List<AdminAuditLogResponse> getByTargetEmail(String email) {
         return adminAuditLogRepository.findByTargetEmailOrderByCreatedAtDesc(email).stream()
@@ -49,6 +58,9 @@ public class AdminAuditService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Lista las acciones realizadas por el administrador indicado.
+     */
     @Transactional(readOnly = true)
     public List<AdminAuditLogResponse> getByAdminEmail(String adminEmail) {
         return adminAuditLogRepository.findByAdminEmailOrderByCreatedAtDesc(adminEmail).stream()
@@ -56,6 +68,9 @@ public class AdminAuditService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Convierte una entrada de auditoría a su DTO de respuesta.
+     */
     private AdminAuditLogResponse toResponse(AdminAuditLog log) {
         return AdminAuditLogResponse.builder()
                 .id(log.getId())

@@ -44,11 +44,17 @@ public class SystemConfigService implements ApplicationRunner {
         DEFAULTS.put("waitlist_notification_enabled", new String[]{"true", "Notificar a usuarios en espera cuando hay cupo"});
     }
 
+    /**
+     * Semilla de parámetros por defecto al arrancar la aplicación.
+     */
     @Override
     public void run(ApplicationArguments args) {
         seedDefaults();
     }
 
+    /**
+     * Inserta las claves de configuración que aún no existen.
+     */
     @Transactional
     public void seedDefaults() {
         DEFAULTS.forEach((key, meta) -> {
@@ -63,6 +69,9 @@ public class SystemConfigService implements ApplicationRunner {
         });
     }
 
+    /**
+     * Devuelve todos los parámetros globales del sistema.
+     */
     @Transactional(readOnly = true)
     public List<SystemConfigResponse> getAll() {
         return systemConfigRepository.findAll().stream()
@@ -70,6 +79,9 @@ public class SystemConfigService implements ApplicationRunner {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Obtiene un parámetro por su clave.
+     */
     @Transactional(readOnly = true)
     public SystemConfigResponse getByKey(String key) {
         SystemConfig cfg = systemConfigRepository.findById(key)
@@ -77,6 +89,9 @@ public class SystemConfigService implements ApplicationRunner {
         return toResponse(cfg);
     }
 
+    /**
+     * Crea o actualiza un parámetro y registra el cambio en auditoría.
+     */
     @Transactional
     public SystemConfigResponse update(String key, UpdateSystemConfigRequest request,
                                        String adminEmail, String ipAddress) {
@@ -106,6 +121,9 @@ public class SystemConfigService implements ApplicationRunner {
         return toResponse(saved);
     }
 
+    /**
+     * Convierte la entidad de configuración a su DTO de respuesta.
+     */
     private SystemConfigResponse toResponse(SystemConfig cfg) {
         return SystemConfigResponse.builder()
                 .key(cfg.getKey())
