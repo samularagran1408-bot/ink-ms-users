@@ -1,6 +1,8 @@
 package com.inklusport.users.repository;
 
 import com.inklusport.users.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -44,6 +46,24 @@ public interface UserRepository extends JpaRepository<User, String> {
             ORDER BY u.fullName ASC
             """)
     List<User> searchVisible(@Param("name") String name, @Param("disability") String disability);
+
+    @Query("""
+            SELECT u FROM User u
+            WHERE (u.deleted IS NULL OR u.deleted = false)
+              AND (
+                    :status IS NULL
+                    OR (:status = 'active' AND (u.isActive IS NULL OR u.isActive = true))
+                    OR (:status = 'inactive' AND u.isActive = false)
+              )
+              AND (:name IS NULL OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :name, '%'))
+                   OR LOWER(u.email) LIKE LOWER(CONCAT('%', :name, '%')))
+              AND (:disability IS NULL OR LOWER(u.disability) LIKE LOWER(CONCAT('%', :disability, '%')))
+            """)
+    Page<User> pageVisible(
+            @Param("status") String status,
+            @Param("name") String name,
+            @Param("disability") String disability,
+            Pageable pageable);
 
     @Modifying
     @Transactional

@@ -78,6 +78,30 @@ class AdminUserControllerSecurityTest {
     }
 
     @Test
+    void pageUsers_conTokenAdmin_devuelve200() throws Exception {
+        when(userService.pageUsers("all", null, null, 0, 20)).thenReturn(
+                com.inklusport.users.dto.PageResponse.<UserProfileResponse>builder()
+                        .content(List.of(UserProfileResponse.builder().email("a@test.com").fullName("Admin User").build()))
+                        .totalElements(1)
+                        .totalPages(1)
+                        .number(0)
+                        .size(20)
+                        .first(true)
+                        .last(true)
+                        .build()
+        );
+
+        String token = jwtTokenProvider.generateToken("admin@test.com", List.of("ADMIN"));
+
+        mockMvc.perform(get("/api/admin/users/page")
+                        .param("filter", "all")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].email").value("a@test.com"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
     void getAllUsers_conTokenUsuario_devuelve403() throws Exception {
         String token = jwtTokenProvider.generateToken("user@test.com", List.of("USUARIO"));
 

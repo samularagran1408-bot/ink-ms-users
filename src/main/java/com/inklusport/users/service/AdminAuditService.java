@@ -5,6 +5,7 @@ import com.inklusport.users.entity.AdminAuditLog;
 import com.inklusport.users.repository.AdminAuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +44,7 @@ public class AdminAuditService {
      */
     @Transactional(readOnly = true)
     public List<AdminAuditLogResponse> getAll() {
-        return adminAuditLogRepository.findAllByOrderByCreatedAtDesc().stream()
+        return adminAuditLogRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, 200)).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }

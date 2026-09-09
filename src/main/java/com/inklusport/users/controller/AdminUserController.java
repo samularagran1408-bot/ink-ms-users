@@ -64,6 +64,16 @@ public class AdminUserController {
         return ResponseEntity.ok(userService.countVisibleUsers());
     }
 
+    @GetMapping("/page")
+    public ResponseEntity<PageResponse<UserProfileResponse>> pageUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false, defaultValue = "all") String filter,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String disability) {
+        return ResponseEntity.ok(userService.pageUsers(filter, name, disability, page, size));
+    }
+
     @GetMapping("/active/count")
     public ResponseEntity<Long> countActiveUsers() {
         return ResponseEntity.ok(userService.countVisibleActiveUsers());

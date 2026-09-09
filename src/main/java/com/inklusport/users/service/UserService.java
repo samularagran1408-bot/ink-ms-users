@@ -7,6 +7,7 @@ import com.inklusport.users.dto.BulkActionResponse;
 import com.inklusport.users.dto.CreateProfileFromRegisterRequest;
 import com.inklusport.users.dto.FutureRegistrationsCheckResponse;
 import com.inklusport.users.dto.LastLoginResponse;
+import com.inklusport.users.dto.PageResponse;
 import com.inklusport.users.dto.QuizPrepRequest;
 import com.inklusport.users.dto.QuizPrepResponse;
 import com.inklusport.users.dto.UpdateProfileRequest;
@@ -27,6 +28,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -53,6 +57,7 @@ public class UserService {
     private final SportsServiceClient sportsServiceClient;
     private final AuthServiceClient authServiceClient;
     private final CloudinaryStorageService cloudinaryStorage;
+    private static final int LIST_CAP = 50;
 
 
     /**
@@ -660,45 +665,66 @@ public class UserService {
     // MÉTODOS DE LISTADO
 
     /**
-     * Lista todos los usuarios visibles con su último acceso.
+     * Página de usuarios visibles (filtro activo/inactivo/todos + búsqueda).
+     * size máximo 50.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<UserProfileResponse> pageUsers(
+            String filter, String name, String disability, int page, int size) {
+        int safeSize = Math.min(Math.max(size, 1), LIST_CAP);
+        int safePage = Math.max(page, 0);
+        Page<User> result = userRepository.pageVisible(
+                statusFilter(filter),
+                blankToNull(name),
+                blankToNull(disability),
+                PageRequest.of(safePage, safeSize, Sort.by("fullName").ascending()));
+        return PageResponse.of(
+                result,
+                withLastLogins(result.getContent().stream()
+                        .map(this::convertToResponse)
+                        .collect(Collectors.toList())));
+    }
+
+    /**
+     * Lista usuarios visibles (tope 50). Prefiere {@link #pageUsers} en paneles.
      */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getAllUsers() {
-        return withLastLogins(userRepository.findAllVisible().stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList()));
+        return pageUsers("all", null, null, 0, LIST_CAP).getContent();
     }
 
     /**
-     * Lista los usuarios visibles activos.
+     * Lista los usuarios visibles activos (tope 50).
      */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getActiveUsers() {
-        return withLastLogins(userRepository.findVisibleActive().stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList()));
+        return pageUsers("active", null, null, 0, LIST_CAP).getContent();
     }
 
     /**
-     * Lista los usuarios visibles inactivos.
+     * Lista los usuarios visibles inactivos (tope 50).
      */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> getInactiveUsers() {
-        return withLastLogins(userRepository.findVisibleInactive().stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList()));
+        return pageUsers("inactive", null, null, 0, LIST_CAP).getContent();
     }
 
     /**
-     * Busca usuarios visibles por nombre y/o discapacidad.
+     * Busca usuarios visibles por nombre y/o discapacidad (tope 50).
      */
     @Transactional(readOnly = true)
     public List<UserProfileResponse> searchUsers(String name, String disability) {
-        String nameFilter = blankToNull(name);
-        String disabilityFilter = blankToNull(disability);
-        return withLastLogins(userRepository.searchVisible(nameFilter, disabilityFilter).stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList()));
+        return pageUsers("all", name, disability, 0, LIST_CAP).getContent();
+    }
+
+    private static String statusFilter(String filter) {
+        if (filter == null || filter.isBlank() || "all".equalsIgnoreCase(filter)) {
+            return null;
+        }
+        if ("inactive".equalsIgnoreCase(filter)) {
+            return "inactive";
+        }
+        return "active";
     }
 
     /**
