@@ -47,6 +47,9 @@ class UserServiceTest {
     @Mock
     private CloudinaryStorageService cloudinaryStorage;
 
+    @Mock
+    private OrganizerPlanAssignmentService organizerPlanAssignmentService;
+
     @InjectMocks
     private UserService userService;
 

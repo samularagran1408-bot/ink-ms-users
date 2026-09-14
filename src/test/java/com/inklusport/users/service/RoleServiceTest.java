@@ -36,6 +36,9 @@ class RoleServiceTest {
     @Mock
     private AdminAuditService adminAuditService;
 
+    @Mock
+    private OrganizerPlanAssignmentService organizerPlanAssignmentService;
+
     @InjectMocks
     private RoleService roleService;
 

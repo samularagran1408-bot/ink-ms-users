@@ -40,6 +40,10 @@ sports:
   service:
     url: ${SPORTS_SERVICE_URL:http://sports-service:3003}
 
+subscriptions:
+  service:
+    url: ${SUBSCRIPTIONS_SERVICE_URL:http://subscriptions-service:3005}
+
 cloudinary:
   url: ${CLOUDINARY_URL:}
   cloud-name: ${CLOUDINARY_CLOUD_NAME:}

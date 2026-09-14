@@ -57,6 +57,7 @@ public class UserService {
     private final SportsServiceClient sportsServiceClient;
     private final AuthServiceClient authServiceClient;
     private final CloudinaryStorageService cloudinaryStorage;
+    private final OrganizerPlanAssignmentService organizerPlanAssignmentService;
     private static final int LIST_CAP = 50;
 
 
@@ -281,6 +282,7 @@ public class UserService {
         if (user.isOrganizerQuizPassed()) {
             user.setOrganizerVerificationStatus(User.VerificationStatus.approved);
             appendVerifiedRole(user, "ORGANIZADOR");
+            organizerPlanAssignmentService.assignFreePlanIfOrganizer(user.getId(), "ORGANIZADOR");
             log.info("Usuario {} verificado como ORGANIZADOR (quiz)", userId);
         } else {
             user.setOrganizerVerificationStatus(User.VerificationStatus.rejected);
@@ -427,6 +429,7 @@ public class UserService {
             if (passed) {
                 user.setOrganizerVerificationStatus(User.VerificationStatus.approved);
                 appendVerifiedRole(user, "ORGANIZADOR");
+                organizerPlanAssignmentService.assignFreePlanIfOrganizer(user.getId(), "ORGANIZADOR");
             } else {
                 user.setOrganizerQuizAttempts(user.getOrganizerQuizAttempts() + 1);
             }

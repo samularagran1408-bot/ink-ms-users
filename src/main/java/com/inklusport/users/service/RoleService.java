@@ -32,6 +32,7 @@ public class RoleService {
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final AdminAuditService adminAuditService;
+    private final OrganizerPlanAssignmentService organizerPlanAssignmentService;
 
     /**
      * Lista todos los roles disponibles del catálogo.
@@ -67,6 +68,8 @@ public class RoleService {
         userRole.setAssignedBy(assignedByAdminEmail);
 
         userRoleRepository.save(userRole);
+
+        organizerPlanAssignmentService.assignFreePlanIfOrganizer(user.getId(), role.getName());
 
         adminAuditService.log(assignedByAdminEmail, "ASSIGN_ROLE", userEmail, user.getId(),
                 "{\"role\":\"" + role.getName() + "\",\"roleId\":" + role.getId() + "}", ipAddress);
@@ -110,6 +113,7 @@ public class RoleService {
             userRole.setAssignedBy(adminEmail);
             userRoleRepository.save(userRole);
             assigned.add(role.getName());
+            organizerPlanAssignmentService.assignFreePlanIfOrganizer(user.getId(), role.getName());
         }
 
         if (assigned.isEmpty()) {
