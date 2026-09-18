@@ -7,6 +7,7 @@ import com.inklusport.users.exception.GlobalExceptionHandler;
 import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.security.JwtTokenProvider;
 import com.inklusport.users.service.AdminAuditService;
+import com.inklusport.users.service.RoleRequestService;
 import com.inklusport.users.service.RoleService;
 import com.inklusport.users.service.SystemConfigService;
 import com.inklusport.users.service.UserActivityService;
@@ -50,6 +51,9 @@ class AdminUserControllerSecurityTest {
 
     @MockBean
     private RoleService roleService;
+
+    @MockBean
+    private RoleRequestService roleRequestService;
 
     @MockBean
     private AdminAuditService adminAuditService;

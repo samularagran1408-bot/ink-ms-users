@@ -10,6 +10,7 @@ import com.inklusport.users.dto.LastLoginResponse;
 import com.inklusport.users.dto.PageResponse;
 import com.inklusport.users.dto.QuizPrepRequest;
 import com.inklusport.users.dto.QuizPrepResponse;
+import com.inklusport.users.dto.RoleRequestResponse;
 import com.inklusport.users.dto.UpdateProfileRequest;
 import com.inklusport.users.dto.UserAccessStatusResponse;
 import com.inklusport.users.dto.UserProfileResponse;
@@ -58,6 +59,7 @@ public class UserService {
     private final AuthServiceClient authServiceClient;
     private final CloudinaryStorageService cloudinaryStorage;
     private final OrganizerPlanAssignmentService organizerPlanAssignmentService;
+    private final RoleRequestService roleRequestService;
     private static final int LIST_CAP = 50;
 
 
@@ -76,9 +78,40 @@ public class UserService {
         user.setActive(true);
 
         User savedUser = userRepository.save(user);
+        assignDefaultUsuarioRole(savedUser);
         log.info("Perfil de usuario creado: {}", email);
 
-        return convertToResponse(savedUser);
+        return withPendingRoleRequest(convertToResponse(savedUser), savedUser.getId());
+    }
+
+    /**
+     * Alta o actualización del perfil tras el registro (auth ya pudo crear el perfil).
+     * Procesa requestedRole si llega ENTRENADOR u ORGANIZADOR.
+     */
+    @Transactional
+    public UserProfileResponse createOrCompleteProfile(String email, UpdateProfileRequest request) {
+        if (userRepository.existsByEmail(email)) {
+            return updateUserProfile(email, request);
+        }
+        if (request.getFullName() == null || request.getFullName().isBlank()) {
+            throw new RuntimeException("El nombre completo es obligatorio");
+        }
+        UserProfileResponse created = createUserProfile(email, request.getFullName().trim());
+        boolean hasExtras = request.getPhone() != null
+                || request.getProfilePicture() != null
+                || request.getBio() != null
+                || request.getDisability() != null
+                || request.getCompanionFullName() != null
+                || request.getCompanionPhone() != null
+                || request.getCompanionRelationship() != null
+                || request.getCompanionEmail() != null
+                || request.getSupportPreference() != null
+                || request.getSupportPreferenceNotes() != null
+                || request.getRequestedRole() != null;
+        if (hasExtras) {
+            return updateUserProfile(email, request);
+        }
+        return created;
     }
 
     /**
@@ -161,7 +194,7 @@ public class UserService {
     public UserProfileResponse getUserProfileByEmail(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
-        return withLastLogin(convertToResponse(user));
+        return withPendingRoleRequest(withLastLogin(convertToResponse(user)), user.getId());
     }
 
     /**
@@ -171,7 +204,7 @@ public class UserService {
     public UserProfileResponse getUserProfileById(String id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
-        return withLastLogin(convertToResponse(user));
+        return withPendingRoleRequest(withLastLogin(convertToResponse(user)), user.getId());
     }
 
     /**
@@ -200,9 +233,14 @@ public class UserService {
                 user.getCompanionPhone());
 
         User updatedUser = userRepository.save(user);
+
+        if (request.getRequestedRole() != null && !request.getRequestedRole().isBlank()) {
+            roleRequestService.createIfElevatedRoleRequested(updatedUser, request.getRequestedRole());
+        }
+
         log.info("Perfil actualizado: {}", email);
 
-        return convertToResponse(updatedUser);
+        return withPendingRoleRequest(convertToResponse(updatedUser), updatedUser.getId());
     }
 
     /**
@@ -928,6 +966,17 @@ public class UserService {
                 )
                 .verifiedRoles(user.getVerifiedRoles())
                 .build();
+    }
+
+    /**
+     * Adjunta la solicitud de rol pendiente al perfil, si existe.
+     */
+    private UserProfileResponse withPendingRoleRequest(UserProfileResponse response, String userId) {
+        if (response == null || userId == null) {
+            return response;
+        }
+        roleRequestService.findPendingForUser(userId).ifPresent(response::setPendingRoleRequest);
+        return response;
     }
 
     /**

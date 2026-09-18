@@ -29,4 +29,10 @@ public class UpdateProfileRequest {
     private String supportPreference;
 
     private String supportPreferenceNotes;
+
+    /**
+     * Rol solicitado al crear/completar el perfil: USUARIO, ENTRENADOR u ORGANIZADOR.
+     * ENTRENADOR/ORGANIZADOR generan solicitud pendiente de aprobación admin.
+     */
+    private String requestedRole;
 }

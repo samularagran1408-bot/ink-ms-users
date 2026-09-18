@@ -5,6 +5,7 @@ import com.inklusport.users.entity.User;
 import com.inklusport.users.exception.UserHasFutureEventsException;
 import com.inklusport.users.repository.UserRepository;
 import com.inklusport.users.service.AdminAuditService;
+import com.inklusport.users.service.RoleRequestService;
 import com.inklusport.users.service.RoleService;
 import com.inklusport.users.service.SystemConfigService;
 import com.inklusport.users.service.UserActivityService;
@@ -42,6 +43,7 @@ public class AdminUserController {
     private final AdminAuditService adminAuditService;
     private final SystemConfigService systemConfigService;
     private final UserActivityService userActivityService;
+    private final RoleRequestService roleRequestService;
 
 
     @GetMapping
@@ -290,6 +292,48 @@ public class AdminUserController {
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return buildErrorResponse(e, "/api/admin/users/" + targetEmail + "/roles/" + roleId);
+        }
+    }
+
+    @GetMapping("/role-requests")
+    public ResponseEntity<?> listRoleRequests(
+            @RequestParam(defaultValue = "PENDING") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(roleRequestService.listByStatus(status, page, size));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/role-requests");
+        }
+    }
+
+    @PostMapping("/role-requests/{id}/approve")
+    public ResponseEntity<?> approveRoleRequest(
+            @PathVariable String id,
+            @RequestBody(required = false) ReviewRoleRequest body,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        try {
+            String notes = body != null ? body.getNotes() : null;
+            return ResponseEntity.ok(roleRequestService.approve(
+                    id, adminEmail, notes, clientIp(httpRequest)));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/role-requests/" + id + "/approve");
+        }
+    }
+
+    @PostMapping("/role-requests/{id}/reject")
+    public ResponseEntity<?> rejectRoleRequest(
+            @PathVariable String id,
+            @RequestBody(required = false) ReviewRoleRequest body,
+            @AuthenticationPrincipal String adminEmail,
+            HttpServletRequest httpRequest) {
+        try {
+            String notes = body != null ? body.getNotes() : null;
+            return ResponseEntity.ok(roleRequestService.reject(
+                    id, adminEmail, notes, clientIp(httpRequest)));
+        } catch (Exception e) {
+            return buildErrorResponse(e, "/api/admin/users/role-requests/" + id + "/reject");
         }
     }
 

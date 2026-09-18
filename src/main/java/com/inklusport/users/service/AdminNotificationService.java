@@ -46,6 +46,52 @@ public class AdminNotificationService {
     }
 
     /**
+     * Avisa a los administradores de una solicitud de rol en el registro.
+     */
+    public void notifyAdminsRoleRequested(String email, String fullName, String requestedRole) {
+        String displayName = (fullName != null && !fullName.isBlank()) ? fullName.trim() : email;
+        notifyAdmins(
+                "admin_role_request",
+                "Nueva solicitud de rol",
+                "El usuario " + displayName + " (" + email + ") solicitó el rol " + requestedRole
+                        + ". Revísala en Solicitudes de rol.",
+                null
+        );
+    }
+
+    /**
+     * Notifica al usuario el resultado de su solicitud de rol.
+     * Si fue aprobada, indica recargar la página para cargar el nuevo rol.
+     */
+    public void notifyUserRoleRequestResolved(String userEmail, String requestedRole, boolean approved) {
+        if (userEmail == null || userEmail.isBlank()) {
+            return;
+        }
+        String role = requestedRole != null ? requestedRole : "solicitado";
+        NotificationRequest request = new NotificationRequest();
+        request.setUserId(userEmail.trim());
+        if (approved) {
+            request.setType("role_request_approved");
+            request.setTitle("Rol aprobado");
+            request.setBody("Tu solicitud del rol " + role
+                    + " fue aprobada. Recarga la página para que se cargue tu nuevo rol.");
+            request.setPriority("high");
+        } else {
+            request.setType("role_request_rejected");
+            request.setTitle("Solicitud de rol rechazada");
+            request.setBody("Tu solicitud del rol " + role
+                    + " fue rechazada. Conservas el rol Usuario. Si crees que es un error, contacta a un administrador.");
+            request.setPriority("medium");
+        }
+        try {
+            notificationClient.createNotification(userEmail.trim(), request);
+            log.info("Notificación de rol enviada a {} [{}]", userEmail, request.getType());
+        } catch (Exception e) {
+            log.error("Error notificando a {} por solicitud de rol: {}", userEmail, e.getMessage());
+        }
+    }
+
+    /**
      * Envía una notificación a todos los correos de administrador resueltos.
      */
     public void notifyAdmins(String type, String title, String body, String eventId) {

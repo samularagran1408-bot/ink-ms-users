@@ -74,4 +74,9 @@ public class UserProfileResponse {
      * Roles verificados
      */
     private String verifiedRoles;
+
+    /**
+     * Solicitud de rol pendiente (si el usuario pidió ENTRENADOR/ORGANIZADOR al registrarse).
+     */
+    private RoleRequestResponse pendingRoleRequest;
 }

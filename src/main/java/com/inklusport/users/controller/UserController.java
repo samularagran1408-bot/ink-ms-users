@@ -36,27 +36,14 @@ public class UserController {
 
     /**
      * Crea el perfil base del usuario autenticado.
-     * Si llegan campos adicionales, completa los datos en la misma operacion.
+     * Si el perfil ya existe (p. ej. creado desde auth), lo completa y procesa requestedRole.
      */
     @PostMapping("/perfil")
     public ResponseEntity<?> createMyProfile(@AuthenticationPrincipal String email,
                                               @Valid @RequestBody UpdateProfileRequest request,
                                               HttpServletRequest httpRequest) {
         try {
-            UserProfileResponse response = userService.createUserProfile(email, request.getFullName());
-            
-            // Actualiza campos opcionales si fueron enviados en el request.
-            if (request.getPhone() != null
-                    || request.getProfilePicture() != null
-                    || request.getBio() != null
-                    || request.getDisability() != null
-                    || request.getCompanionFullName() != null
-                    || request.getCompanionPhone() != null
-                    || request.getCompanionRelationship() != null
-                    || request.getCompanionEmail() != null) {
-                response = userService.updateUserProfile(email, request);
-            }
-            
+            UserProfileResponse response = userService.createOrCompleteProfile(email, request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             return buildErrorResponse(e, "/api/users/perfil");

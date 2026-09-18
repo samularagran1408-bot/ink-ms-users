@@ -50,6 +50,9 @@ class UserServiceTest {
     @Mock
     private OrganizerPlanAssignmentService organizerPlanAssignmentService;
 
+    @Mock
+    private RoleRequestService roleRequestService;
+
     @InjectMocks
     private UserService userService;
 
@@ -64,6 +67,7 @@ class UserServiceTest {
         when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
         when(userRepository.save(user)).thenReturn(user);
         when(userRoleRepository.findRoleNamesByUserId("user-1")).thenReturn(List.of("USUARIO"));
+        when(roleRequestService.findPendingForUser("user-1")).thenReturn(Optional.empty());
 
         UpdateProfileRequest request = new UpdateProfileRequest();
         request.setDisability("MOTORA");
